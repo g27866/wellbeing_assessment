@@ -1,0 +1,319 @@
+/* --- Base Font & Body --- */
+body {
+  font-family: 'Lexend', 'Noto Sans TC', sans-serif;
+  background-color: white;
+  color: #111816;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* --- General Form Styles --- */
+.form-label {
+  color: #111816;
+  font-size: 1rem; /* 16px */
+  font-weight: 500;
+  line-height: 1.5rem; /* 24px */
+  padding-bottom: 0.5rem; /* 8px */
+}
+
+.form-input,
+.form-textarea {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex: 1;
+  resize: none;
+  overflow: hidden;
+  border-radius: 0.75rem; /* rounded-xl */
+  color: #111816;
+  border: 1px solid #dbe6e3;
+  background-color: white;
+  padding: 15px;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.5rem;
+  transition: all 0.2s ease-in-out;
+}
+.form-input {
+  height: 3.5rem; /* h-14 */
+}
+.form-input::placeholder,
+.form-textarea::placeholder {
+  color: #5f8c80;
+}
+.form-input:focus,
+.form-textarea:focus {
+  outline: none;
+  border-color: #039571;
+  box-shadow: 0 0 0 1px #039571;
+}
+
+.form-input-inline {
+  height: 2.5rem; /* h-10 */
+  margin-left: 0.5rem; /* ml-2 */
+  flex: 1 1 0%;
+  border-radius: 0.5rem; /* rounded-lg */
+  padding: 0.5rem; /* p-2 */
+  border: 1px solid #dbe6e3;
+  background-color: white;
+  font-size: 1rem;
+}
+.form-input-inline:focus {
+    outline: none;
+    border-color: #039571;
+    box-shadow: 0 0 0 1px #039571;
+}
+
+.form-input-table {
+  height: 2.5rem; /* h-10 */
+  border-radius: 0.5rem; /* rounded-lg */
+  text-align: center;
+  padding: 0.25rem; /* p-1 */
+  border: 1px solid #dbe6e3;
+  background-color: white;
+  font-size: 1rem;
+}
+.form-input-table:focus {
+    outline: none;
+    border-color: #039571;
+    box-shadow: 0 0 0 1px #039571;
+}
+
+.form-title {
+  color: #111816;
+  font-size: 1.25rem; /* text-xl */
+  font-weight: 700;
+  line-height: 1.375; /* leading-tight */
+  letter-spacing: -0.015em;
+  padding-bottom: 1rem; /* pb-4 */
+  margin-bottom: 1.5rem; /* mb-6 */
+  border-bottom: 1px solid #e5e7eb; /* border-gray-200 */
+}
+
+.form-group {
+  margin-bottom: 2rem; /* mb-8 */
+}
+
+.form-question {
+  color: #111816;
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.5rem;
+  padding-bottom: 1rem; /* pb-4 */
+}
+
+/* --- Checkbox & Radio Styles (For lists) --- */
+.checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem 1.5rem; /* gap-y-4 gap-x-6 */
+}
+@media (min-width: 768px) {
+  .checkbox-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.checkbox-grid-small {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 0.75rem 1.5rem; /* gap-y-3 gap-x-6 */
+}
+@media (min-width: 640px) {
+    .checkbox-grid-small {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+
+.checkbox-item, .radio-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem; /* gap-3 */
+  cursor: pointer;
+}
+.checkbox-item label, .radio-item label {
+  color: #111816;
+  font-size: 0.875rem; /* text-sm */
+  line-height: 1.5rem; /* leading-normal */
+  cursor: pointer;
+  user-select: none;
+}
+@media (min-width: 768px) {
+    .checkbox-item label, .radio-item label {
+        font-size: 1rem;
+    }
+}
+
+.checkbox-item-other {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem; /* gap-2 */
+  grid-column: span 2 / span 2;
+}
+@media (min-width: 640px) {
+    .checkbox-item-other {
+        grid-column: span 1 / span 1;
+    }
+}
+
+
+/* --- Table Styles --- */
+.table-container {
+  overflow-x: auto;
+  border: 1px solid #e5e7eb; /* border-gray-200 */
+  border-radius: 0.5rem; /* rounded-lg */
+  padding: 1rem; /* p-4 */
+  background-color: white;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); /* shadow-sm */
+}
+
+.table-header-grid-5, .table-row-grid-5 {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1rem; /* gap-4 */
+  align-items: center;
+  padding-top: 0.625rem; /* py-2.5 */
+  padding-bottom: 0.625rem;
+  min-width: 600px;
+}
+.table-header-grid-5 {
+  border-bottom: 2px solid #d1d5db; /* border-b-2 border-gray-300 */
+  font-weight: 600;
+  text-align: center;
+  padding-bottom: 0.75rem; /* pb-3 */
+  margin-bottom: 0.5rem; /* mb-2 */
+  color: #111816;
+}
+.table-header-grid-5 p:first-child {
+  text-align: left;
+  font-weight: 700;
+}
+.table-row-grid-5 {
+  border-bottom: 1px solid #f3f4f6; /* border-gray-100 */
+}
+.table-row-grid-5:last-child {
+  border-bottom: 0;
+}
+.table-row-grid-5 p {
+  font-size: 0.875rem;
+  color: #374151; /* gray-800 */
+}
+.radio-cell {
+  display: flex;
+  justify-content: center;
+}
+
+
+/* --- Exosome Section Styles --- */
+.exo-section {
+  border: 1px solid #e5e7eb; /* border-gray-200 */
+  border-radius: 0.5rem; /* rounded-lg */
+  padding: 1rem; /* p-4 */
+  background-color: rgb(249 250 251 / 0.5); /* bg-gray-50/50 */
+}
+.exo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem 1.5rem; /* gap-y-4 gap-x-6 */
+}
+.exo-grid .font-semibold {
+  padding-bottom: 0.5rem; /* pb-2 */
+  border-bottom: 1px solid #e5e7eb; /* border-gray-200 */
+  margin-bottom: 0.5rem; /* mb-2 */
+  font-size: 1rem;
+  color: #374151; /* gray-800 */
+  font-weight: 600;
+}
+.exo-grid .checkbox-item label {
+  font-size: 0.875rem;
+}
+
+/* --- Tab Styles --- */
+.tab-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 3px solid transparent;
+  color: #5f8c80;
+  padding-bottom: 13px;
+  padding-top: 1rem; /* pt-4 */
+  cursor: pointer;
+  white-space: nowrap;
+  padding-left: 0.75rem; /* px-3 */
+  padding-right: 0.75rem;
+  transition: all 0.2s ease-in-out;
+}
+@media (min-width: 768px) {
+    .tab-link {
+        padding-left: 1rem; /* md:px-4 */
+        padding-right: 1rem;
+    }
+}
+.tab-link:hover {
+  color: #111816;
+}
+.tab-link.active {
+  border-bottom-color: #111816;
+  color: #111816;
+}
+.tab-link.active p {
+  color: #111816;
+  font-weight: 700;
+}
+.tab-link p {
+  color: #5f8c80;
+  font-size: 0.875rem; /* text-sm */
+  font-weight: 700; /* font-bold */
+  line-height: 1.5rem; /* leading-normal */
+  letter-spacing: 0.015em;
+}
+.tab-content.hidden {
+  display: none;
+}
+
+/* --- Submit Button --- */
+.submit-button {
+  display: flex;
+  min-width: 84px;
+  max-width: 480px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 9999px; /* rounded-full */
+  height: 2.5rem; /* h-10 */
+  padding-left: 1rem; /* px-4 */
+  padding-right: 1rem;
+  background-color: #039571;
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.5rem;
+  letter-spacing: 0.015em;
+  transition: background-color 0.2s ease-in-out;
+}
+.submit-button:hover {
+  background-color: #027a5e;
+}
+
+/* --- Tailwind Form Plugin Customization --- */
+.form-checkbox,
+.form-radio {
+  border-color: #d1d5db; /* border-gray-300 */
+  color: #039571;
+}
+.form-checkbox:focus,
+.form-radio:focus {
+  outline: none;
+  --tw-ring-color: #039571;
+  border-color: #039571;
+  box-shadow: 0 0 0 1px #039571;
+  --tw-ring-offset-width: 0px;
+}
+.form-checkbox:checked,
+.form-radio:checked {
+  border-color: #039571;
+  background-color: #039571;
+}
