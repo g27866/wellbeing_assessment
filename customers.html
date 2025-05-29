@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin="" />
+  <link rel="stylesheet" as="style" onload="this.rel='stylesheet'"
+    href="https://fonts.googleapis.com/css2?display=swap&amp;family=Manrope%3Awght%40400%3B500%3B700%3B800&amp;family=Noto+Sans%3Awght%40400%3B500%3B700%3B900" />
+  <title>Customer Management</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* 確保 body 背景透明並移除邊距 */
+    body { margin: 0; padding: 0; background-color: transparent; font-family: Manrope, "Noto Sans", sans-serif; }
+    /* 卡片式區塊 */
+    .data-block { border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 1.5rem; background-color: white; overflow: hidden; }
+    /* 資料區塊標頭 */
+    .data-header { background-color: #f8fafc; padding: 0.75rem 1.5rem; font-weight: 600; border-bottom: 1px solid #e2e8f0; }
+    /* 資料區塊內容 */
+    .data-content { padding: 1.5rem; }
+    /* 資料列 */
+    .data-row { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 0; border-bottom: 1px dashed #e2e8f0; }
+    .data-row:last-child { border-bottom: none; }
+    .line-icon { width: 20px; height: 20px; vertical-align: middle; margin-left: 5px; }
+    /* 按鈕樣式 (微調) */
+    .action-button { background-color: #009378; color: white; padding: 6px 12px; border-radius: 6px; cursor: pointer; border: none; font-size: 13px; transition: background-color 0.2s ease; }
+    .action-button:hover { background-color: #007a63; }
+    /* 這裡的 submit-button 會套用 style.css 的新樣式 */
+    .cancel-button { background-color: #6b7280; color: white; padding: 6px 12px; border-radius: 6px; cursor: pointer; border: none; font-size: 13px; }
+    .cancel-button:hover { background-color: #4b5563; }
+    .hidden { display: none; }
+  </style>
+</head>
+
+<body>
+  <div class="relative flex size-full min-h-screen flex-col bg-white group/design-root overflow-x-hidden">
+    <div class="layout-container flex h-full grow flex-col">
+      <div class="px-4 sm:px-10 md:px-20 lg:px-40 flex flex-1 justify-center py-5">
+        <div class="layout-content-container flex flex-col max-w-[960px] flex-1 bg-white shadow-lg rounded-xl overflow-hidden border border-gray-100">
+
+          <div class="flex flex-wrap justify-between gap-3 p-6 md:p-8 bg-gray-50 border-b border-gray-200">
+            <p class="text-[#111816] tracking-light text-2xl md:text-[32px] font-bold leading-tight min-w-72">
+              客戶資料管理
+            </p>
+          </div>
+
+          <div class="p-6 md:p-8">
+
+            <div id="search-section" class="data-block">
+              <div class="data-header">查詢客戶</div>
+              <div class="data-content">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                  <input id="search-name" placeholder="姓名 (可含*)" class="form-input">
+                  <input id="search-phone" placeholder="電話 (可含*)" class="form-input">
+                  <input id="search-email" placeholder="Email (可含*)" class="form-input">
+                </div>
+                <button id="search-button" class="w-full submit-button h-14 rounded-xl">
+                  查詢
+                </button>
+                <p id="search-message" class="text-red-500 text-sm mt-2"></p>
+              </div>
+            </div>
+
+            <div id="add-customer-section" class="data-block hidden">
+              <div class="data-header">新增客戶資料</div>
+              <div class="data-content">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <input id="add-name" placeholder="姓名" class="form-input" required>
+                  <input id="add-mobile" placeholder="行動電話" class="form-input" required>
+                  <input id="add-localtel" placeholder="市內電話 (選填)" class="form-input">
+                  <input id="add-email" placeholder="Email (選填)" class="form-input" type="email">
+                  <input id="add-birth" placeholder="生日 (YYYY-MM-DD)" class="form-input" type="date">
+                </div>
+                <button id="create-button" class="w-full submit-button h-14 rounded-xl">
+                  建立客戶資料
+                </button>
+                <p id="add-message" class="text-red-500 text-sm mt-2"></p>
+              </div>
+            </div>
+
+            <div id="customer-data-section" class="data-block hidden">
+              <input type="hidden" id="customer-id-holder" value="">
+
+              <div class="data-header">客戶基本資料</div>
+              <div class="data-content" id="customer-info-content">
+                </div>
+              <div class="data-content" id="add-treatment-form" style="padding-top: 0; display: none;">
+                <h4 class="font-semibold mb-2">新增購買療程</h4>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                  <input id="add-treatment-name" placeholder="療程名稱" class="form-input">
+                  <input id="add-treatment-count" placeholder="購買數量" type="number" class="form-input">
+                  <input id="add-treatment-date" type="date" class="form-input">
+                </div>
+                <button id="submit-add-treatment" class="action-button">送出購買</button>
+                <button id="cancel-add-treatment" class="cancel-button ml-2">取消</button>
+              </div>
+
+              <div class="data-header">購買療程紀錄</div>
+              <div class="data-content" id="treatment-history-content">
+                <p>尚未有購買紀錄。</p>
+              </div>
+              <div class="data-content" id="add-appointment-form" style="padding-top: 0; display: none;">
+                <h4 class="font-semibold mb-2">新增預約</h4>
+                <input type="hidden" id="appointment-treatment-id" value="">
+                <input type="hidden" id="appointment-treatment-name" value="">
+                <div class="grid grid-cols-1 md:grid-cols-1 gap-4 mb-4">
+                  <input id="add-appointment-datetime" type="datetime-local" class="form-input">
+                </div>
+                <button id="submit-add-appointment" class="action-button">送出預約</button>
+                <button id="cancel-add-appointment" class="cancel-button ml-2">取消</button>
+              </div>
+
+              <div class="data-header">預約紀錄</div>
+              <div class="data-content" id="appointment-history-content">
+                <p>尚未有預約紀錄。</p>
+              </div>
+            </div>
+
+          </div> </div> </div> </div> </div> <script src="api.js"></script>
+  <script src="customers.js"></script>
+</body>
+
+</html>
