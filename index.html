@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html>
-
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -10,7 +9,7 @@
   <title>致好醫學診所 - 管理系統</title>
   <link rel="icon" type="image/x-icon" href="https://g27866.github.io/wellbeing_assessment/we_c_a4.png" />
   <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="/style.css">
   <style>
     body, html {
         margin: 0;
@@ -34,7 +33,17 @@
         color: #009378; /* Active link color */
         text-decoration: underline;
     }
+    /* 讓未登入時的 iframe 看起來比較不突兀 */
+    #content-frame.empty {
+        background-color: #e9ecef; /* 或者一個輕微的背景色 */
+    }
   </style>
+
+    <script defer src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script defer src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <script defer src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+    <script defer src="https://www.gstatic.com/firebasejs/9.22.1/firebase-functions-compat.js"></script>
+
 </head>
 
 <body>
@@ -50,19 +59,24 @@
         </h2>
       </div>
       <div class="flex flex-1 justify-end gap-8">
-        <div class="flex items-center gap-9">
-          <a id="menu-customers" class="text-[#111816] text-sm font-medium leading-normal menu-link" href="#" data-src="customers.html">客戶資料</a>
-          <a id="menu-assessment" class="text-[#111816] text-sm font-medium leading-normal menu-link" href="#" data-src="assessment.html">問卷填寫</a>
-          </div>
-        <button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-[#f0f5f3] text-[#111816] text-sm font-bold leading-normal tracking-[0.015em]">
-          <span class="truncate">Login</span>
+        <nav class="flex items-center gap-9">
+          <a id="menu-customers" class="text-[#111816] text-sm font-medium leading-normal menu-link" href="#" data-src="customers.html" style="display: none;">客戶資料</a>
+          <a id="menu-assessment" class="text-[#111816] text-sm font-medium leading-normal menu-link" href="#" data-src="assessment.html" style="display: none;">問卷填寫</a>
+          <a id="menu-calendar" class="text-[#111816] text-sm font-medium leading-normal menu-link" href="#" data-src="calendar.html" style="display: none;">行事曆</a>
+        </nav>
+        <button id="auth-button" class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-[#f0f5f3] text-[#111816] text-sm font-bold leading-normal tracking-[0.015em]">
+          <span id="auth-button-text" class="truncate">Login</span>
         </button>
       </div>
     </header>
 
-    <iframe id="content-frame" src="customers.html" title="Content Area"></iframe>
+    <iframe id="content-frame" src="about:blank" title="Content Area" class="empty"></iframe>
 
   </div>
+
+  <button id="scrollToTopBtn" title="回到頂部">
+    <span>&#8679;</span>
+  </button>
 
   <script src="main.js"></script>
 

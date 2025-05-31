@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>未登入</title>
+    <style>
+        body {
+            font-family: 'Noto Sans TC', 'Manrope', 'Helvetica Neue', Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 90vh;
+            margin: 0;
+            background-color: #f8fcfb;
+            color: #333;
+            text-align: center;
+            padding: 20px;
+            box-sizing: border-box;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 480px;
+            padding: 30px;
+            background-color: #353535; /* 維持您原本的深色背景 */
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); /* 稍微調整陰影 */
+        }
+        img.logo {
+            width: 150px;
+            margin-bottom: 20px;
+        }
+        p.login-instruction {
+            font-size: 1em; /* 調整回正常大小 */
+            margin-bottom: 15px;
+            color: #F5F5F7; 
+        }
+        p.uid-info-container { /* 包裹 UID 資訊和按鈕的容器 */
+            margin-top: 15px;
+        }
+        span#uid-text-value { /* 用於顯示 UID 的 span */
+            font-weight: bold;
+            color: #FFFFFF; /* 白色 UID 文字 */
+            background-color: #555555; /* UID 文字背景，使其更易選取 */
+            padding: 2px 6px;
+            border-radius: 4px;
+            word-break: break-all; /* 確保長 UID 可以換行 */
+        }
+        p.uid-guidance { /* UID 複製指引文字 */
+             font-size: 0.85em;
+             color: #cccccc;
+             margin-top: 8px;
+        }
+        button#copy-uid-button {
+            background-color: #009378; /* 主題綠色 */
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+            margin-top: 10px;
+            transition: background-color 0.2s;
+        }
+        button#copy-uid-button:hover {
+            background-color: #007a63; /* 深一點的綠色 */
+        }
+        button#copy-uid-button:disabled {
+            background-color: #5cb85c; /* 例如Bootstrap的成功色，表示已複製 */
+            cursor: default;
+        }
+        strong.login-accent { /* 用於 "Login" 按鈕提示 */
+            color: #20c997; /* 亮一點的綠色，在深色背景上更突出 */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <img src="https://www.doing-housework.com/store_image/wellbeingclinic/L172422402827.png" alt="診所 Logo" class="logo">
+        
+        <p id="default-message" class="login-instruction">請點擊頁面右上方的<strong class="login-accent"> Login </strong>按鈕登入系統。</p>
+        
+        <div id="uid-section" style="display: none;"> <p id="uid-display-message" class="login-instruction">您的帳號尚未啟用或權限不足。<br>請提供(email、name、UID)給管理員設定</p>
+            <div class="uid-info-container">
+                <p class="login-instruction">UID: <span id="uid-text-value"></span></p>
+                <button id="copy-uid-button" style="display: none;">複製 UID</button>
+                <p id="copy-status-message" class="uid-guidance" style="font-size: 0.8em; margin-top: 5px;"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const params = new URLSearchParams(window.location.search);
+            const uid = params.get('uid');
+            
+            const defaultMessageElement = document.getElementById('default-message');
+            const uidSectionElement = document.getElementById('uid-section'); // 整個 UID 區塊
+            const uidDisplayMessageElement = document.getElementById('uid-display-message'); // "您的帳號尚未啟用..."
+            const uidValueElement = document.getElementById('uid-text-value'); // 用來放 UID 的 span
+            const copyUidButton = document.getElementById('copy-uid-button');
+            const copyStatusMessage = document.getElementById('copy-status-message');
+
+            if (uid && uidValueElement && defaultMessageElement && uidSectionElement && copyUidButton) {
+                defaultMessageElement.style.display = 'none'; // 隱藏預設的 "請點擊 Login" 訊息
+                uidSectionElement.style.display = 'block'; // 顯示 UID 相關訊息的整個區塊
+                uidValueElement.textContent = uid; // 將 UID 填入 span
+                copyUidButton.style.display = 'inline-block'; // 顯示複製按鈕
+
+                copyUidButton.addEventListener('click', function() {
+                    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                        navigator.clipboard.writeText(uid).then(function() {
+                            copyUidButton.textContent = 'UID 已複製!';
+                            copyUidButton.disabled = true;
+                            if(copyStatusMessage) copyStatusMessage.textContent = "已成功複製到剪貼簿。";
+                            
+                            setTimeout(function() {
+                                copyUidButton.textContent = '複製 UID';
+                                copyUidButton.disabled = false;
+                                if(copyStatusMessage) copyStatusMessage.textContent = "";
+                            }, 2500); // 2.5秒後恢復按鈕文字和狀態
+                        }).catch(function(err) {
+                            console.error('[login-prompt.html] 無法複製 UID: ', err);
+                            if(copyStatusMessage) copyStatusMessage.textContent = "複製失敗，請手動選取複製。";
+                            alert('複製 UID 失敗，請手動選取上方的 UID 並複製。');
+                        });
+                    } else {
+                        // Fallback 或提示瀏覽器不支援
+                        if(copyStatusMessage) copyStatusMessage.textContent = "您的瀏覽器不支援自動複製。";
+                        alert('您的瀏覽器不支援自動複製功能，請手動選取上方的 UID 並複製。');
+                    }
+                });
+            } else {
+                // 如果沒有 UID 參數，則只顯示預設的登入提示
+                if(defaultMessageElement) defaultMessageElement.style.display = 'block';
+                if(uidSectionElement) uidSectionElement.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>門診行事曆</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link rel="stylesheet" href="/style.css"> <style>
+        /* 日曆相關樣式 */
+        .calendar-day-cell {
+            height: 32px;
+            width: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid transparent;
+            cursor: pointer;
+            border-radius: 50%; /* 日期格子改為圓形 */
+            transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+            font-size: 0.75rem; /* text-xs */
+        }
+        .calendar-day-cell:not(.disabled):hover {
+            background-color: #f0f9ff; /* 滑鼠懸停時的背景色 */
+            border-color: #bae6fd;
+        }
+        .calendar-day-cell.disabled {
+            color: #cbd5e1; /* 非本月日期的顏色 */
+            cursor: not-allowed;
+            background-color: transparent;
+        }
+        .calendar-day-cell.selected {
+            background-color: #009378; /* 選中日期的背景色 */
+            color: white;
+            font-weight: bold;
+            border-color: #009378;
+        }
+        .calendar-day-cell.today {
+            border: 2px solid #009378; /* 「今天」的邊框 */
+            font-weight: bold;
+            color: #009378;
+            background-color: transparent;
+        }
+        .calendar-day-cell.today.selected { /* 「今天」且被選中 */
+            background-color: #009378;
+            color: white;
+            border: 2px solid #005c4b;
+        }
+
+        /* 時間軸與預約區塊樣式 */
+        .session-grid-container {
+            position: relative;
+        }
+        .timeline-column {
+            padding-top: 22px; /* 使時間軸內容下移，對齊診間內容頂部 (約等於診間標頭高度) */
+        }
+        .timeline-column > div { /* 時間軸上的每個時間標籤 */
+            height: 24px; /* 30分鐘間隔的高度 */
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            color: #4b5563; /* 文字顏色 */
+            font-size: 0.625rem; /* text-[10px] */
+        }
+        .room-content-column {
+            background-image: linear-gradient(to bottom, #e5e7eb 1px, transparent 1px); /* 淺色水平分隔線 */
+            background-size: 100% 24px; /* 分隔線間距，同時間格高度 */
+            background-color: #ffffff; /* 診間內容區背景 */
+        }
+        .appointment-block { /* 單個預約記錄的樣式 */
+            position: absolute; /* 由 JavaScript 計算 top 和 height */
+            left: 2px;
+            right: 2px;
+            background-color: #ccfbf1; /* 預約背景色 */
+            border: 1px solid #99f6e4;
+            border-left-width: 3px;
+            border-left-color: #14b8a6; /* 左側強調線顏色 */
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-size: 10px; /* 預約文字大小 */
+            line-height: 1.1;
+            overflow: hidden;
+            box-sizing: border-box;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            transition: background-color 0.2s, transform 0.1s;
+        }
+        .appointment-block:hover {
+            background-color: #a7f3d0; /* 滑鼠懸停時的預約背景色 */
+            border-color: #6ee7b7;
+            transform: translateY(-1px);
+        }
+        .rooms-area.grid > div:nth-child(-n+5) { /* 診間標頭 (前5個子元素) */
+             height: 22px; /* 設定診間標頭的明確高度 */
+             display: flex;
+             align-items: center;
+             justify-content: center;
+        }
+        .appointments-wrapper { /* 右側預約顯示區塊的滾動設定 */
+            max-height: calc(100vh - 160px); /* 調整可視高度 */
+            overflow-y: auto;
+        }
+        .calendar-header-button { /* 日曆上下月按鈕樣式 */
+            padding: 0.3rem;
+        }
+        .calendar-header-button svg { /* 按鈕內SVG圖示大小 */
+            width: 16px;
+            height: 16px;
+        }
+        .calendar-month-year-text { /* 日曆月份年份文字樣式 */
+            font-size: 0.875rem; /* text-sm */
+        }
+        .calendar-weekday-header span { /* 日曆星期標頭文字樣式 */
+            font-size: 0.625rem; /* text-[10px] */
+        }
+    </style>
+</head>
+<body>
+    <div class="relative flex size-full min-h-screen flex-col bg-white group/design-root overflow-x-hidden">
+        <div class="layout-container flex h-full grow flex-col">
+            <div class="px-4 sm:px-6 lg:px-8 flex flex-1 justify-center py-5">
+                <div class="layout-content-container flex flex-col max-w-5xl w-full flex-1 bg-white shadow-lg rounded-xl overflow-hidden border border-gray-200">
+                    <div class="flex flex-wrap justify-between items-center gap-3 p-4 md:p-6 bg-gray-50 border-b border-gray-200">
+                        <p class="text-[#111816] tracking-light text-xl md:text-2xl font-bold leading-tight">
+                            門診行事曆
+                        </p>
+                        </div>
+
+                    <div class="flex flex-col md:flex-row flex-1 p-3 md:p-4 gap-4">
+                        <div class="w-full md:w-[280px] lg:w-[320px] flex-shrink-0 calendar-wrapper bg-gray-50 p-3 rounded-lg shadow-md">
+                            <div class="flex items-center justify-between mb-2">
+                                <button id="prev-month" class="calendar-header-button rounded-full hover:bg-gray-200 transition-colors">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 256 256"><path d="M165.66,202.34a8,8,0,0,1-11.32,11.32l-80-80a8,8,0,0,1,0-11.32l80-80a8,8,0,0,1,11.32,11.32L91.31,128Z"></path></svg>
+                                </button>
+                                <p id="month-year" class="calendar-month-year-text text-[#0c1d1a] font-bold leading-tight flex-1 text-center">
+                                    載入中...
+                                </p>
+                                <button id="next-month" class="calendar-header-button rounded-full hover:bg-gray-200 transition-colors">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 256 256"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"></path></svg>
+                                </button>
+                            </div>
+                            <div class="grid grid-cols-7 text-center calendar-weekday-header font-semibold text-gray-500 py-1 border-b border-gray-200 mb-1">
+                                <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+                            </div>
+                            <div id="calendar-days" class="grid grid-cols-7 gap-0.5">
+                                </div>
+                        </div>
+
+                        <div class="flex-grow appointments-wrapper space-y-3">
+                            <div id="afternoon-session" class="clinic-session bg-gray-50 p-2 md:p-3 rounded-lg shadow-md hidden">
+                                <h1 class="text-base md:text-lg font-semibold text-teal-700 mb-2 border-b border-teal-200 pb-1.5">
+                                    午診時段 <span id="afternoon-hours" class="text-xs font-normal text-gray-500"></span>
+                                </h1>
+                                <div class="session-grid-container flex">
+                                    <div id="afternoon-timeline" class="timeline-column w-10 text-right pr-1.5 shrink-0">
+                                        </div>
+                                    <div class="rooms-area flex-grow grid grid-cols-5 gap-px bg-gray-300 border border-l-0 border-gray-300">
+                                        <div class="font-medium text-center text-[10px] py-0.5 bg-teal-100 text-teal-800 col-span-1 truncate px-0.5">診療室</div>
+                                        <div class="font-medium text-center text-[10px] py-0.5 bg-teal-100 text-teal-800 col-span-1 truncate px-0.5">震波室</div>
+                                        <div class="font-medium text-center text-[10px] py-0.5 bg-teal-100 text-teal-800 col-span-1 truncate px-0.5">點滴室1</div>
+                                        <div class="font-medium text-center text-[10px] py-0.5 bg-teal-100 text-teal-800 col-span-1 truncate px-0.5">點滴室2</div>
+                                        <div class="font-medium text-center text-[10px] py-0.5 bg-teal-100 text-teal-800 col-span-1 truncate px-0.5">點滴室3</div>
+                                        
+                                        <div id="afternoon-room-0" class="room-content-column relative col-span-1"></div>
+                                        <div id="afternoon-room-1" class="room-content-column relative col-span-1"></div>
+                                        <div id="afternoon-room-2" class="room-content-column relative col-span-1"></div>
+                                        <div id="afternoon-room-3" class="room-content-column relative col-span-1"></div>
+                                        <div id="afternoon-room-4" class="room-content-column relative col-span-1"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="evening-session" class="clinic-session bg-gray-50 p-2 md:p-3 rounded-lg shadow-md hidden">
+                                <h1 class="text-base md:text-lg font-semibold text-indigo-700 mb-2 border-b border-indigo-200 pb-1.5">
+                                    晚診時段 <span id="evening-hours" class="text-xs font-normal text-gray-500"></span>
+                                </h1>
+                                <div class="session-grid-container flex">
+                                    <div id="evening-timeline" class="timeline-column w-10 text-right pr-1.5 shrink-0">
+                                        </div>
+                                    <div class="rooms-area flex-grow grid grid-cols-5 gap-px bg-gray-300 border border-l-0 border-gray-300">
+                                        <div class="font-medium text-center text-[10px] py-0.5 bg-indigo-100 text-indigo-800 col-span-1 truncate px-0.5">診療室</div>
+                                        <div class="font-medium text-center text-[10px] py-0.5 bg-indigo-100 text-indigo-800 col-span-1 truncate px-0.5">震波室</div>
+                                        <div class="font-medium text-center text-[10px] py-0.5 bg-indigo-100 text-indigo-800 col-span-1 truncate px-0.5">點滴室1</div>
+                                        <div class="font-medium text-center text-[10px] py-0.5 bg-indigo-100 text-indigo-800 col-span-1 truncate px-0.5">點滴室2</div>
+                                        <div class="font-medium text-center text-[10px] py-0.5 bg-indigo-100 text-indigo-800 col-span-1 truncate px-0.5">點滴室3</div>
+
+                                        <div id="evening-room-0" class="room-content-column relative col-span-1"></div>
+                                        <div id="evening-room-1" class="room-content-column relative col-span-1"></div>
+                                        <div id="evening-room-2" class="room-content-column relative col-span-1"></div>
+                                        <div id="evening-room-3" class="room-content-column relative col-span-1"></div>
+                                        <div id="evening-room-4" class="room-content-column relative col-span-1"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="no-appointments-message" class="text-center text-gray-500 py-8 hidden">
+                                此日期無預約記錄或非門診時間。
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="/auth-check.js"></script>
+    <script src="calendar.js"></script>
+</body>
+</html>

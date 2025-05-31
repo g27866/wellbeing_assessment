@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
-
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -9,30 +8,8 @@
     href="https://fonts.googleapis.com/css2?display=swap&amp;family=Manrope%3Awght%40400%3B500%3B700%3B800&amp;family=Noto+Sans%3Awght%40400%3B500%3B700%3B900" />
   <title>Customer Management</title>
   <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-  <link rel="stylesheet" href="style.css">
-  <style>
-    /* 確保 body 背景透明並移除邊距 */
-    body { margin: 0; padding: 0; background-color: transparent; font-family: Manrope, "Noto Sans", sans-serif; }
-    /* 卡片式區塊 */
-    .data-block { border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 1.5rem; background-color: white; overflow: hidden; }
-    /* 資料區塊標頭 */
-    .data-header { background-color: #f8fafc; padding: 0.75rem 1.5rem; font-weight: 600; border-bottom: 1px solid #e2e8f0; }
-    /* 資料區塊內容 */
-    .data-content { padding: 1.5rem; }
-    /* 資料列 */
-    .data-row { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 0; border-bottom: 1px dashed #e2e8f0; }
-    .data-row:last-child { border-bottom: none; }
-    .line-icon { width: 20px; height: 20px; vertical-align: middle; margin-left: 5px; }
-    /* 按鈕樣式 (微調) */
-    .action-button { background-color: #009378; color: white; padding: 6px 12px; border-radius: 6px; cursor: pointer; border: none; font-size: 13px; transition: background-color 0.2s ease; }
-    .action-button:hover { background-color: #007a63; }
-    /* 這裡的 submit-button 會套用 style.css 的新樣式 */
-    .cancel-button { background-color: #6b7280; color: white; padding: 6px 12px; border-radius: 6px; cursor: pointer; border: none; font-size: 13px; }
-    .cancel-button:hover { background-color: #4b5563; }
-    .hidden { display: none; }
-  </style>
-</head>
-
+  <link rel="stylesheet" href="/style.css">
+  </head>
 <body>
   <div class="relative flex size-full min-h-screen flex-col bg-white group/design-root overflow-x-hidden">
     <div class="layout-container flex h-full grow flex-col">
@@ -46,79 +23,189 @@
           </div>
 
           <div class="p-6 md:p-8">
-
             <div id="search-section" class="data-block">
-              <div class="data-header">查詢客戶</div>
+
               <div class="data-content">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                  <input id="search-name" placeholder="姓名 (可含*)" class="form-input">
-                  <input id="search-phone" placeholder="電話 (可含*)" class="form-input">
-                  <input id="search-email" placeholder="Email (可含*)" class="form-input">
+                  <input id="search-name" placeholder="姓名" class="custom-form-input">
+                  <input id="search-phone" placeholder="行動電話/市內電話" class="custom-form-input">
+                  <input id="search-email" placeholder="email" class="custom-form-input lowercase-email">
                 </div>
-                <button id="search-button" class="w-full submit-button h-14 rounded-xl">
-                  查詢
-                </button>
-                <p id="search-message" class="text-red-500 text-sm mt-2"></p>
+                <div class="flex gap-2">
+                    <button id="clear-search-button" class="w-full cancel-capsule">清除</button>
+                    <button id="search-button" class="w-full submit-button">查詢</button>
+
+                </div>
+                <p id="search-message" class="error-text mt-2 text-sm"></p>
               </div>
             </div>
 
             <div id="add-customer-section" class="data-block hidden">
               <div class="data-header">新增客戶資料</div>
               <div class="data-content">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                  <input id="add-name" placeholder="姓名" class="form-input" required>
-                  <input id="add-mobile" placeholder="行動電話" class="form-input" required>
-                  <input id="add-localtel" placeholder="市內電話 (選填)" class="form-input">
-                  <input id="add-email" placeholder="Email (選填)" class="form-input" type="email">
-                  <input id="add-birth" placeholder="生日 (YYYY-MM-DD)" class="form-input" type="date">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 mb-4">
+                  <input id="add-name" placeholder="客戶姓名" class="custom-form-input">
+                  <div>
+                    <div class="flex gap-x-3 capsule-radio-group">
+                        <input type="radio" name="add-gender" value="Male" id="add-gender-male" class="custom-form-input">
+                        <label for="add-gender-male" class="capsule-radio-label">Male</label>
+                        <input type="radio" name="add-gender" value="Female" id="add-gender-female" class="custom-form-input">
+                        <label for="add-gender-female" class="capsule-radio-label">Female</label>
+                        <input type="radio" name="add-gender" value="Other" id="add-gender-other" class="custom-form-input">
+                        <label for="add-gender-other" class="capsule-radio-label">Other</label>
+                    </div>
+                  </div>
+                  <input id="add-mobile" placeholder="行動電話" class="custom-form-input">
+                  <input id="add-localtel" placeholder="市內電話" class="custom-form-input">
+                  <input id="add-email" placeholder="email" class="custom-form-input lowercase-email" type="email">
+                  <input id="add-birth" title="出生日期" class="custom-form-input" type="date">
                 </div>
-                <button id="create-button" class="w-full submit-button h-14 rounded-xl">
-                  建立客戶資料
-                </button>
-                <p id="add-message" class="text-red-500 text-sm mt-2"></p>
+                <div class="flex gap-2">
+                    <button id="clear-add-customer-button" class="w-full cancel-capsule">清除</button>
+                    <button id="create-button" class="w-full submit-button">建立客戶資料</button>
+                    
+                </div>
+                <p id="add-message" class="error-text mt-2 text-sm"></p>
               </div>
             </div>
 
             <div id="customer-data-section" class="data-block hidden">
               <input type="hidden" id="customer-id-holder" value="">
+              <input type="hidden" id="current-line-uid-holder" value="">
 
-              <div class="data-header">客戶基本資料</div>
+              <div class="data-header">
+                <span>客戶基本資料</span>
+                <button id="edit-customer-button-header" class="edit-customer-btn">編輯</button> </div>
               <div class="data-content" id="customer-info-content">
                 </div>
-              <div class="data-content" id="add-treatment-form" style="padding-top: 0; display: none;">
-                <h4 class="font-semibold mb-2">新增購買療程</h4>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                  <input id="add-treatment-name" placeholder="療程名稱" class="form-input">
-                  <input id="add-treatment-count" placeholder="購買數量" type="number" class="form-input">
-                  <input id="add-treatment-date" type="date" class="form-input">
+              <div id="customer-info-actions-footer" class="data-content  actions-right-container hidden">
+                  <button id="cancel-edit-customer-button" class="cancel-button">取消</button>
+                  <button id="save-customer-changes-button" class="action-button">儲存</button>
+              </div>
+
+              <div class="data-content border-t border-gray-200 pt-4 actions-right-container" id="customer-actions-content">
+                  <button id="add-assessment-button" class="action-button">新增問卷</button>
+                  <button id="goto-assessment-records-btn" class="action-button">問卷紀錄</button>
+                  <button id="show-add-treatment-btn" class="action-button">新增購買療程</button>
+              </div>
+
+              <div id="add-treatment-form-container" class="data-content border-t border-gray-200 hidden pt-4">
+                <h4 class="font-semibold mb-3 text-lg">新增購買課程</h4>
+                <div class="grid grid-cols-1 md:grid-cols-[2fr_2fr_1fr] gap-x-4 gap-y-4 mb-4 items-end">
+                  <div>
+                    <label for="add-treatment-category" class="form-label">療程類別</label>
+                    <select id="add-treatment-category" class="custom-form-input"></select>
+                  </div>
+                  <div>
+                    <label for="add-treatment-name" class="form-label">療程名稱</label>
+                    <select id="add-treatment-name" class="custom-form-input"></select>
+                  </div>
+                  <div>
+                    <label for="add-treatment-count" class="form-label">購買數量</label>
+                    <input id="add-treatment-count" type="number" min="1" placeholder="次數" class="custom-form-input">
+                  </div>
                 </div>
-                <button id="submit-add-treatment" class="action-button">送出購買</button>
+                 <div class="mb-4">
+                    <label for="add-treatment-first-use-datetime" class="form-label">首次預約日期/時間</label>
+                    <input id="add-treatment-first-use-datetime" type="datetime-local" class="custom-form-input" step="1800">
+                  </div>
                 <button id="cancel-add-treatment" class="cancel-button ml-2">取消</button>
+                <button id="submit-add-treatment" class="action-button">確認購買</button>
+                
+                <p id="add-treatment-message" class="error-text mt-2 text-sm"></p>
               </div>
 
-              <div class="data-header">購買療程紀錄</div>
-              <div class="data-content" id="treatment-history-content">
-                <p>尚未有購買紀錄。</p>
-              </div>
-              <div class="data-content" id="add-appointment-form" style="padding-top: 0; display: none;">
-                <h4 class="font-semibold mb-2">新增預約</h4>
-                <input type="hidden" id="appointment-treatment-id" value="">
-                <input type="hidden" id="appointment-treatment-name" value="">
-                <div class="grid grid-cols-1 md:grid-cols-1 gap-4 mb-4">
-                  <input id="add-appointment-datetime" type="datetime-local" class="form-input">
+              <div class="data-header flex justify-between items-center">
+                <span>購買療程紀錄</span>
+                <div class="filter-capsule-group text-xs">
+                    <input type="checkbox" id="filter-treatment-pending" name="treatment-status-filter" value="pending" checked class="custom-form-input">
+                    <label for="filter-treatment-pending" class="filter-capsule-label">未完成</label>
+                    <input type="checkbox" id="filter-treatment-completed" name="treatment-status-filter" value="completed" class="custom-form-input">
+                    <label for="filter-treatment-completed" class="filter-capsule-label">已完成</label>
+                    <input type="checkbox" id="filter-treatment-revoked" name="treatment-status-filter" value="revoked" class="custom-form-input">
+                    <label for="filter-treatment-revoked" class="filter-capsule-label">已註銷</label>
                 </div>
-                <button id="submit-add-appointment" class="action-button">送出預約</button>
-                <button id="cancel-add-appointment" class="cancel-button ml-2">取消</button>
+              </div>
+              <div class="data-content treatment-history-table" id="treatment-history-content">
+                </div>
+              <div id="inline-appointment-form-template" class="inline-appointment-form hidden">
+                <h5 class="font-semibold mb-2 text-sm">新增 <span class="inline-treatment-name"></span> 預約</h5>
+                <input type="hidden" class="inline-treatment-id-holder">
+                <div class="mb-2">
+                    <input type="datetime-local" id="inline-appointment-datetime-input" class="custom-form-input inline-appointment-datetime" step="1800">
+                </div>
+                <div class="flex actions-right-container">
+                  <button class="cancel-button text-xs ml-1 cancel-inline-appointment">取消</button>  
+                  <button class="action-button text-xs submit-inline-appointment">確認預約</button>
+                </div>
+                <p class="inline-appointment-message error-text mt-1 text-xs"></p>
               </div>
 
-              <div class="data-header">預約紀錄</div>
-              <div class="data-content" id="appointment-history-content">
-                <p>尚未有預約紀錄。</p>
+              <div class="data-header flex justify-between items-center">
+                <span>預約紀錄</span>
+                <div class="filter-capsule-group text-xs">
+                    <input type="checkbox" id="filter-appt-booked" name="appointment-status-filter" value="已預約" checked class="custom-form-input">
+                    <label for="filter-appt-booked" class="filter-capsule-label">已預約</label>
+                    <input type="checkbox" id="filter-appt-completed" name="appointment-status-filter" value="已完成" checked class="custom-form-input">
+                    <label for="filter-appt-completed" class="filter-capsule-label">已完成</label>
+                    <input type="checkbox" id="filter-appt-cancelled" name="appointment-status-filter" value="已取消" class="custom-form-input">
+                    <label for="filter-appt-cancelled" class="filter-capsule-label">已取消</label>
+                </div>
+              </div>
+              <div class="data-content appointment-history-table" id="appointment-history-content">
+                </div>
+
+              <div id="assessment-records-section" class="data-block mt-6">
+                <div class="data-header">問卷紀錄</div>
+                <div class="data-content assessment-history-table" id="assessment-history-content">
+                  </div>
               </div>
             </div>
 
-          </div> </div> </div> </div> </div> <script src="api.js"></script>
+            <div id="status-update-menu" class="status-menu hidden">
+                <input type="hidden" id="status-menu-appointment-id">
+                <input type="hidden" id="status-menu-treatment-id">
+                <div class="p-1">
+                    <label class="status-menu-item"><input type="radio" name="appointment_status_option" value="已預約" class="form-radio mr-2">已預約</label>
+                    <label class="status-menu-item"><input type="radio" name="appointment_status_option" value="已完成" class="form-radio mr-2">已完成</label>
+                    <label class="status-menu-item"><input type="radio" name="appointment_status_option" value="已取消" class="form-radio mr-2">已取消</label>
+                </div>
+                <div class="status-menu-buttons">
+                    <button id="status-menu-cancel-btn" class="status-menu-cancel-btn">取消</button>
+                    <button id="status-menu-confirm-btn" class="status-menu-confirm-btn">確認</button>
+                </div>
+            </div>
+
+            <div id="revoke-treatment-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex justify-center items-center hidden z-50">
+              <div class="relative mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+                <div class="mt-3 text-center">
+                  <h3 class="text-lg leading-6 font-medium text-gray-900">確認註銷療程</h3>
+                  <div class="mt-2 px-7 py-3">
+                    <p class="text-sm text-gray-500 mb-3">
+                      此操作將註銷選定的療程紀錄，此動作無法復原。
+                      請在下方欄位輸入「<strong class="text-red-600">註銷</strong>」以確認。
+                    </p>
+                    <input type="text" id="revoke-confirm-input" class="custom-form-input w-full text-center" placeholder="請輸入 '註銷'">
+                    <p id="revoke-modal-message" class="error-text text-sm mt-2"></p>
+                  </div>
+                  <div class="items-center px-4 py-3">
+                    <button id="confirm-revoke-btn" class="action-button w-full mb-2 bg-red-500 hover:bg-red-600">
+                      確認送出註銷
+                    </button>
+                    <button id="cancel-revoke-btn" class="cancel-button w-full">
+                      取消
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="auth-check.js"></script>
   <script src="customers.js"></script>
 </body>
-
 </html>
