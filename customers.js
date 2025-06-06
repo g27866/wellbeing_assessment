@@ -3,39 +3,49 @@
 function initializePage() {
     console.log("[customers.js] initializePage() called - 頁面初始化開始");
 
-    // 從父視窗獲取 Firebase 實例和輔助工具
+    // 從父視窗獲取 Firebase 相關實例
     const db = window.parent.firebaseDb;
-    if (!db) {
-        console.error("[customers.js] Firestore instance (db) not found from parent window!");
-        alert("系統錯誤：無法連接到資料庫，請重新整理或聯繫管理員。");
-        return; // 如果沒有 db 實例，則無法繼續
-    }
-    const serverTimestamp = window.parent.firebase.firestore.FieldValue.serverTimestamp;
-    const increment = window.parent.firebase.firestore.FieldValue.increment;
+    const functions = window.parent.firebaseFunctions;
+    const firestoreTools = window.parent.firebaseFirestoreNamespace;
+    const Timestamp = firestoreTools ? firestoreTools.Timestamp : null;
+    const serverTimestamp = firestoreTools ? firestoreTools.FieldValue.serverTimestamp : null;
+    const increment = firestoreTools ? firestoreTools.FieldValue.increment : null;
     const getCurrentEditorName = window.parent.getCurrentEditorName;
+    const getCurrentUserRole = window.parent.getCurrentUserRole; // 獲取使用者角色函數
 
 
-    // --- DOM Elements (與您提供的版本相同) ---
+
+    if (!db || !functions || !Timestamp || !serverTimestamp || !increment || !getCurrentEditorName || !getCurrentUserRole) {
+        console.error("[customers.js] Firebase instances or role function not fully available from parent!");
+        alert("系統錯誤：無法正確初始化資料庫連接元件或權限服務，請重新整理。");
+        const buttons = document.querySelectorAll('button');
+        buttons.forEach(btn => btn.disabled = true);
+        return;
+    }
+
+    // DOM Elements (整合後的版本)
     const searchSection = document.getElementById("search-section");
     const searchNameInput = document.getElementById("search-name");
     const searchPhoneInput = document.getElementById("search-phone");
-    // const searchEmailInput = document.getElementById("search-email"); // 根據新規則，Email搜尋已移除
+    const searchDisplayIdInput = document.getElementById("search-display-id"); // 已加入
     const searchButton = document.getElementById("search-button");
     const clearSearchButton = document.getElementById("clear-search-button");
     const searchMessage = document.getElementById("search-message");
-
+    const searchResultsListContainer = document.getElementById("search-results-list-container"); // 已加入
+    const searchResultsRowsContainer = document.getElementById("search-results-rows-container"); // 已加入
     const addCustomerSection = document.getElementById("add-customer-section");
     const addNameInput = document.getElementById("add-name");
+    const addDisplayNameInput = document.getElementById("add-display-name"); // 已加入
     const addMobileInput = document.getElementById("add-mobile");
-    const addLocalTelInput = document.getElementById("add-localtel");
-    const addEmailInput = document.getElementById("add-email"); // Email 欄位仍保留於表單中
+    // const addLocalTelInput = document.getElementById("add-localtel"); // 已移除 (根據先前討論)
+    // const addEmailInput = document.getElementById("add-email");       // 已移除 (根據先前討論)
     const addBirthInput = document.getElementById("add-birth");
     const createButton = document.getElementById("create-button");
     const clearAddCustomerButton = document.getElementById("clear-add-customer-button");
     const addMessage = document.getElementById("add-message");
 
     const customerDataSection = document.getElementById("customer-data-section");
-    const customerDocIdHolder = document.getElementById("customer-id-holder"); // 將儲存 Firestore 的文檔 ID
+    const customerDocIdHolder = document.getElementById("customer-id-holder");
     const currentLineUidHolder = document.getElementById("current-line-uid-holder");
     const customerInfoContent = document.getElementById("customer-info-content");
     const editCustomerButtonHeader = document.getElementById("edit-customer-button-header");
@@ -48,6 +58,7 @@ function initializePage() {
     const treatmentHistoryContent = document.getElementById("treatment-history-content");
     const appointmentHistoryContent = document.getElementById("appointment-history-content");
     const assessmentHistoryContent = document.getElementById("assessment-history-content");
+    const assessmentRecordsSection = document.getElementById("assessment-records-section");
 
     const treatmentFilterPending = document.getElementById("filter-treatment-pending");
     const treatmentFilterCompleted = document.getElementById("filter-treatment-completed");
@@ -62,31 +73,29 @@ function initializePage() {
     const addTreatmentCategorySelect = document.getElementById("add-treatment-category");
     const addTreatmentNameSelect = document.getElementById("add-treatment-name");
     const addTreatmentCountInput = document.getElementById("add-treatment-count");
+    const addTreatmentAmountInput = document.getElementById("add-treatment-amount"); // 已加入
     const addTreatmentFirstUseDateTimeInput = document.getElementById("add-treatment-first-use-datetime");
     const submitAddTreatmentButton = document.getElementById("submit-add-treatment");
     const cancelAddTreatmentButton = document.getElementById("cancel-add-treatment");
     const addTreatmentMessage = document.getElementById("add-treatment-message");
 
     const inlineAppointmentFormTemplate = document.getElementById("inline-appointment-form-template");
+    const inlineEditTreatmentUnitsTemplate = document.getElementById("inline-edit-treatment-units-template"); // 已加入
 
-    const statusUpdateMenu = document.getElementById("status-update-menu");
-    const statusMenuAppointmentIdInput = document.getElementById("status-menu-appointment-id");
-    const statusMenuTreatmentIdInput = document.getElementById("status-menu-treatment-id"); // 這應為 packageId
-    const statusMenuConfirmBtn = document.getElementById("status-menu-confirm-btn");
-    const statusMenuCancelBtn = document.getElementById("status-menu-cancel-btn");
+    const statusUpdateMenuOld = document.getElementById("status-update-menu"); // 舊的，會被新版動態選單取代
 
     const revokeTreatmentModal = document.getElementById("revoke-treatment-modal");
+    const revokeReasonInput = document.getElementById("revoke-reason-input"); // 已加入
     const revokeConfirmInput = document.getElementById("revoke-confirm-input");
     const confirmRevokeBtn = document.getElementById("confirm-revoke-btn");
     const cancelRevokeBtn = document.getElementById("cancel-revoke-btn");
     const revokeModalMessage = document.getElementById("revoke-modal-message");
-    let currentTreatmentPackageToRevokeId = null; // 修改變數名稱
+    let currentTreatmentPackageToRevokeId = null;
 
     const LINE_ICON_URL = "https://g27866.github.io/wellbeing_assessment/line-icon.png";
     const LINE_ICON_GRAY_URL = "https://g27866.github.io/wellbeing_assessment/line-icon_gray.png";
 
-    // 此結構用於填充下拉選單和獲取預設值，不直接寫入 Firestore，而是其內容被用於創建 Firestore 文件
-    const treatmentDataStructure = [
+    const treatmentDataStructure = [ // 維持您提供的結構
         { category: "一般門診", name: "門診治療", times: 1, room:"診療室", durationMinutes: 30 },
         { category: "一般門診", name: "健康檢查-自律神經", times: 1, room:"診療室", durationMinutes: 30 },
         { category: "一般門診", name: "健康檢查-心電圖", times: 1, room:"診療室", durationMinutes: 20 },
@@ -98,7 +107,7 @@ function initializePage() {
         { category: "PRP治療", name: "二代PRP", times: 1, room:"診療室", durationMinutes: 60 },
         { category: "PRP治療", name: "訊聯PRP PLUS", times: 1, room:"診療室", durationMinutes: 60 },
         { category: "外泌體", name: "生髮", times: 1, room:"診療室", durationMinutes: 45 },
-        { category: "外泌體", name: "保養" , times: 1, room:"點滴室", durationMinutes: 60 }, // 預設點滴室，具體分配在JS中處理
+        { category: "外泌體", name: "保養" , times: 1, room:"點滴室", durationMinutes: 60 },
         { category: "外泌體", name: "訊聯幹細胞" , times: 1, room:"點滴室", durationMinutes: 90 },
         { category: "點滴療程", name: "記憶力強化" , times: 1, room:"點滴室", durationMinutes: 60 },
         { category: "點滴療程", name: "血液循環" , times: 1, room:"點滴室", durationMinutes: 60 },
@@ -114,19 +123,67 @@ function initializePage() {
         { category: "疫苗注射", name: "帶狀疱疹", times: 2, room:"診療室", durationMinutes: 15 },
     ];
 
-    // 用於儲存從 Firestore 讀取的資料，替換 MOCK_CUSTOMER_DB
-    let currentEditingCustomerData = null; // 儲存正在編輯的客戶的原始數據 (Firestore doc snapshot.data())
-    let currentLoadedCustomerId = null; // 儲存當前載入客戶的 Firestore 文檔 ID
-    let allCustomerTreatments = []; // 會從 customerTreatmentPackages 集合讀取
-    let allCustomerAppointments = []; // 會從 appointments 子集合讀取
-    let allCustomerAssessments = []; // 會從 assessmentRecords 集合讀取
+    let currentEditingCustomerData = null;
+    let currentLoadedCustomerId = null;
+    let allCustomerTreatments = [];
+    let allCustomerAppointments = [];
+    let allCustomerAssessments = [];
+    // 清理：將 assessmentsLoaded 移至 initializePage 內部作用域，並確保只有一個定義
+    let assessmentsLoaded = false;
 
-    // --- Helper Functions (與您提供的版本相似，但需確保處理 Firestore Timestamp) ---
+    if (!db || !functions || !Timestamp || !serverTimestamp || !increment || !getCurrentEditorName || !getCurrentUserRole) {
+        console.error("[customers.js] Firebase instances or role function not fully available from parent!", {
+            db: !!db, functions: !!functions, Timestamp: !!Timestamp, serverTimestamp: !!serverTimestamp,
+            increment: !!increment, getCurrentEditorName: !!getCurrentEditorName, getCurrentUserRole: !!getCurrentUserRole
+        });
+        alert("系統錯誤：無法正確初始化資料庫連接元件或權限服務，請重新整理。");
+        const buttons = document.querySelectorAll('button');
+        buttons.forEach(btn => btn.disabled = true);
+        return;
+    }
+    // --- Helper Functions ---
+// customers.js
+
+    async function loadAssessmentHistoryLazy() {
+        if (assessmentsLoaded) return; // 如果已經載入過，則不再執行
+
+        // 檢查 db 實例和當前是否有載入客戶的 Firestore Document ID (currentLoadedCustomerId)
+        // 並且也需要 currentEditingCustomerData 來獲取 displayCustomerId
+        if (!db || !currentLoadedCustomerId || !currentEditingCustomerData) {
+            console.warn("[customers.js] DB not available or no customer loaded (or missing displayCustomerId) for assessment history.");
+            if (assessmentHistoryContent) assessmentHistoryContent.innerHTML = `<p class='text-base p-4'>問卷紀錄待載入 (請先查詢客戶)...</p>`;
+            return;
+        }
+
+        try {
+            if (assessmentHistoryContent) assessmentHistoryContent.innerHTML = `<p class='text-base p-4'>載入問卷紀錄中...</p>`;
+            
+            // currentLoadedCustomerId 是客戶在 'customers' 集合中的 Firestore Document ID
+            // currentEditingCustomerData.displayCustomerId 是客戶的顯示ID (例如 "000001")
+            console.log(`[customers.js] Lazy loading assessment history for customer Firestore Doc ID: ${currentLoadedCustomerId}, using displayCustomerId for query: ${currentEditingCustomerData.displayCustomerId}`);
+            
+            // 從 'assessmentRecords' 集合中查詢
+            // 使用 'customerId' 欄位進行比對，該欄位儲存的是客戶的 displayCustomerId
+            const snap = await db.collection("assessmentRecords")
+                                .where("customerId", "==", currentEditingCustomerData.displayCustomerId) // ✨ 核心改動：使用 displayCustomerId 進行查詢
+                                .orderBy("submittedAt", "desc") // 按提交時間降序排列
+                                .get();
+                                
+            allCustomerAssessments = snap.docs.map(d => ({ id: d.id, ...d.data() })); // 將查詢結果轉換並儲存
+            renderAssessmentHistory(); // 渲染問卷歷史列表
+            assessmentsLoaded = true; // 標記為已載入
+        } catch (err) {
+            console.error("[customers.js] Lazy load assessment error:", err);
+            if (assessmentHistoryContent) assessmentHistoryContent.innerHTML = `<p class='error-text p-4'>載入問卷紀錄失敗: ${err.message}</p>`;
+        }
+    }
+
     function showUiSection(sectionToShow, keepSearchVisible = false) {
         if(addCustomerSection) addCustomerSection.classList.add("hidden");
         if(customerDataSection) customerDataSection.classList.add("hidden");
         if (revokeTreatmentModal) revokeTreatmentModal.classList.add("hidden");
-        
+        if (searchResultsListContainer) searchResultsListContainer.classList.add("hidden"); // 新增：隱藏結果列表
+
         if (!keepSearchVisible && searchSection) {
             searchSection.classList.add("hidden");
         } else if (searchSection) {
@@ -136,31 +193,31 @@ function initializePage() {
             sectionToShow.classList.remove("hidden");
         }
     }
-    
+
     function setDateTimeInputDefault(inputElement) {
-        if(!inputElement) return;
+        if (!inputElement) return;
         const now = new Date();
-        const minutes = now.getMinutes();
-        const roundedMinutes = Math.floor(minutes / 30) * 30; // 四捨五入到最近的30分鐘
-        now.setMinutes(roundedMinutes);
-        now.setSeconds(0);
-        now.setMilliseconds(0);
-        // 轉換為本地的 YYYY-MM-DDTHH:MM 格式
-        const offset = now.getTimezoneOffset() * 60000;
-        const localISOTime = (new Date(now.getTime() - offset)).toISOString().slice(0, 16);
-        inputElement.value = localISOTime;
+        const roundedMinutes = Math.floor(now.getMinutes() / 30) * 30;
+        now.setMinutes(roundedMinutes, 0, 0);
+        const pad = (n) => n.toString().padStart(2, "0");
+        const localISO =
+            `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}` +
+            `T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+        inputElement.value = localISO;
     }
 
     function convertFirestoreTimestampToInputDate(timestamp) {
-        if (!timestamp || typeof timestamp.toDate !== 'function') return '';
+        if (!timestamp || typeof timestamp.toDate !== "function") return "";
         try {
-            return timestamp.toDate().toISOString().split('T')[0];
+            const d = timestamp.toDate();
+            const pad = (n) => n.toString().padStart(2, "0");
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
         } catch (e) {
-            console.error("Error converting Firestore timestamp to input date string:", e, timestamp);
-            return '';
+            console.error("Error converting Firestore timestamp:", e, timestamp);
+            return "";
         }
     }
-    
+
     function formatFirestoreTimestampForDisplay(timestamp) {
         if (!timestamp || typeof timestamp.toDate !== 'function') return 'N/A';
         try {
@@ -178,107 +235,116 @@ function initializePage() {
     }
 
     function displayGeneralMessage(element, message, isError = true) {
-        if (element) {
-            element.textContent = message;
-            element.className = message ? (isError ? 'error-text mt-2 text-sm' : 'success-text mt-2 text-sm') : 'mt-2 text-sm';
+            if (element) {
+                element.textContent = message; // 設定文字內容
+
+                // 管理錯誤/成功狀態的 class，同時保留其他 class
+                if (message) { // 如果有訊息，才設定樣式
+                    if (isError) {
+                        element.classList.add('error-text');
+                        element.classList.remove('success-text');
+                    } else {
+                        element.classList.add('success-text');
+                        element.classList.remove('error-text');
+                    }
+                    // 可以根據需要確保元素可見，例如：
+                    // element.style.display = 'block'; 
+                } else {
+                    // 如果訊息為空，清除狀態 class，並可選擇隱藏元素
+                    element.classList.remove('error-text', 'success-text');
+                    // element.style.display = 'none'; // 可選
+                }
+            }
         }
-    }
     
-    function handleEmailInputToLowercase(event) {
-        if(event && event.target) {
-            event.target.value = event.target.value.toLowerCase();
+
+
+    async function generateNewDisplayCustomerId() {
+        if (!functions) {
+            console.error("[customers.js] Firebase Functions instance not available.");
+            throw new Error("無法初始化雲端函數服務。");
+        }
+        console.log("[customers.js] Calling Cloud Function 'generateDisplayCustomerId'...");
+        try {
+            const generateIdFunction = functions.httpsCallable('generateDisplayCustomerId');
+            const result = await generateIdFunction();
+            if (result.data && result.data.displayCustomerId) {
+                return result.data.displayCustomerId;
+            } else {
+                throw new Error("從雲端函數獲取客戶ID的格式不正確。");
+            }
+        } catch (error) {
+            console.error("[customers.js] Error calling 'generateDisplayCustomerId' Cloud Function:", error);
+            let alertMsg = `產生客戶ID時發生雲端錯誤: ${error.message || '未知錯誤'}`;
+            if (error.code === 'unauthenticated') alertMsg = "錯誤：您需要登入才能執行此操作。";
+            else if (error.code === 'permission-denied') alertMsg = "錯誤：您的帳號無權限執行此操作。請聯繫管理員。";
+            else if (error.code === 'not-found') alertMsg = "錯誤：找不到指定的雲端函數。";
+            alert(alertMsg);
+            throw error;
         }
     }
 
-    // --- `displayCustomerId` 產生機制 ---
-// customers.js (在 initializePage 內部或可訪問的作用域)
-
-async function generateNewDisplayCustomerId() {
-    // 獲取在 main.js 中初始化的 Firebase Functions 服務實例
-    const functions = window.parent.firebaseFunctions; 
-    if (!functions) {
-        console.error("[customers.js] Firebase Functions instance not available from parent window.");
-        throw new Error("無法初始化雲端函數服務，請確認 main.js 已正確設定。");
-    }
-
-    console.log("[customers.js] Calling Cloud Function 'generateDisplayCustomerId'...");
-    try {
-        // 獲取對您已部署的 Cloud Function 的引用
-        const generateIdFunction = functions.httpsCallable('generateDisplayCustomerId');
-        
-        // 呼叫 Cloud Function (不需要傳遞 data，因為 UID 是從 context.auth 中獲取的)
-        const result = await generateIdFunction(); 
-
-        // Cloud Function 成功執行並返回結果
-        if (result.data && result.data.displayCustomerId) {
-            console.log("[customers.js] Successfully received displayCustomerId from Cloud Function:", result.data.displayCustomerId);
-            return result.data.displayCustomerId;
-        } else {
-            // Cloud Function 返回的資料格式不符合預期
-            console.error("[customers.js] Cloud Function did not return displayCustomerId correctly.", result.data);
-            throw new Error("從雲端函數獲取客戶ID的格式不正確。");
-        }
-    } catch (error) {
-        console.error("[customers.js] Error calling 'generateDisplayCustomerId' Cloud Function:", error);
-        // 這裡可以根據 error.code 和 error.message 給使用者更具體的錯誤提示
-        if (error.code === 'unauthenticated') {
-            alert("錯誤：您需要登入才能執行此操作。");
-        } else if (error.code === 'permission-denied') {
-             alert("錯誤：您的帳號無權限執行此操作。請聯繫管理員。");
-        } else if (error.code === 'not-found') {
-             alert("錯誤：找不到指定的雲端函數 (generateDisplayCustomerId)。請確認函式已正確部署。");
-        } else {
-            alert(`產生客戶ID時發生雲端錯誤: ${error.message || '未知錯誤'}`);
-        }
-        throw error; // 將錯誤繼續拋出，讓調用者 (handleCreateCustomer) 知道出錯了
-    }
-}
-
-    // --- 表單驗證 (與您提供的版本相似) ---
     function validateSearchInputs() {
         const name = searchNameInput ? searchNameInput.value.trim() : '';
         const phone = searchPhoneInput ? searchPhoneInput.value.trim() : '';
-        // Email 搜尋已移除
-        if (!name && !phone) {
-            displayGeneralMessage(searchMessage, "請至少輸入姓名或電話進行查詢。", true);
+        const displayId = searchDisplayIdInput ? searchDisplayIdInput.value.trim() : '';
+        let errors = [];
+
+        if (!name && !phone && !displayId) {
+            errors.push("請至少輸入姓名、電話或客戶代號進行查詢。");
+        }
+
+        // 針對客戶代號的驗證：如果輸入，則必須是1到6位數字
+        if (displayId) {
+            if (!/^\d+$/.test(displayId)) { // 必須完全是數字
+                errors.push("客戶代號必須為數字。");
+            } else if (displayId.length > 6) { // 長度不可超過6位 (雖然 input 事件已限制，多一層防護)
+                errors.push("客戶代號不可超過6位數字。");
+            } else if (parseInt(displayId, 10) === 0 && displayId.length > 1 && !name && !phone) {
+                 // 如果只輸入了類似 "00" 且沒有其他條件，可能也視為無效或提示
+                 // 但目前主要驗證 1-6 位數字即可，補零會在查詢時處理
+            } else if (displayId.length === 0 && (name || phone)) {
+                // 如果客戶代號為空，但有其他查詢條件，這是允許的
+            } else if (displayId.length < 1) { // 此條件其實包含在 displayId.length === 0 中
+                 // errors.push("客戶代號若有輸入，至少需1位數字。"); // 其實可以允許1位數
+            }
+             // 簡化：若 displayId 有值，則必須是1到6位數字
+            if (displayId.length > 0 && !/^\d{1,6}$/.test(displayId)) {
+                 errors.push("客戶代號必須為1至6位數字。");
+            }
+        }
+
+
+        if (errors.length > 0) {
+            displayGeneralMessage(searchMessage, errors.join(" "), true);
             return false;
         }
-        // 可以加入更細緻的長度或格式檢查
         displayGeneralMessage(searchMessage, "", false);
         return true;
     }
 
-    function validateAddOrEditCustomerInputs(isEdit = false) {
-        // ... (此函數的驗證邏輯與您之前提供的版本基本相同，確保欄位存在)
-        // ... (姓名、性別、電話擇一、電話格式、Email格式等)
+    function validateAddOrEditCustomerInputs(isEdit = false) { // 更新：移除 localTel, email；displayName 選填
         const nameInput = isEdit ? document.getElementById('edit-customer-name') : addNameInput;
         const name = nameInput ? nameInput.value.trim() : '';
+        // 暱稱 (displayName) 是選填，不特別驗證
         const genderRadio = isEdit ? document.querySelector('input[name="edit-gender"]:checked') : document.querySelector('input[name="add-gender"]:checked');
         const gender = genderRadio ? genderRadio.value : null;
         const mobileInput = isEdit ? document.getElementById('edit-customer-mobile') : addMobileInput;
         const mobile = mobileInput ? mobileInput.value.trim() : '';
-        const localTelInput = isEdit ? document.getElementById('edit-customer-localtel') : addLocalTelInput;
-        const localTel = localTelInput ? localTelInput.value.trim() : '';
-        const emailInput = isEdit ? document.getElementById('edit-customer-email') : addEmailInput;
-        const email = emailInput ? emailInput.value.trim() : '';
         let errors = [];
 
-        if (!name || name.length < 1) errors.push("姓名為必填。"); // 允許單字
-        if (!gender) errors.push("性別為必填。");
-        if (!mobile && !localTel) errors.push("行動電話或市內電話必須擇一填寫。");
+        if (!name || name.length < 1) errors.push("客戶姓名為必填。");
         
+        if (!gender && !isEdit) { // 新增時性別必填
+             errors.push("性別為必填。");
+        }
+        // 編輯時，若原本有性別，目前UI不允許清空，所以不用特別驗證 "不可改為空"
+
+        if (!mobile) errors.push("行動電話為必填。"); // 行動電話改為必填
         if (mobile && !/^(\+?\d{1,3}[-.\s]?)?(\(?\d{1,}\)?[-.\s]?)?[\d\s-]{7,15}$/.test(mobile) && !/^09\d{8}$/.test(mobile)) {
-             errors.push("行動電話格式不符 ( 台灣手機請輸入09xxxxxxxx 或含國碼 )");
+             errors.push("行動電話格式不符 (台灣手機請輸入09xxxxxxxx 或含國碼)。");
         } else if (mobile && mobile.startsWith("09") && mobile.length !== 10) {
-            errors.push("台灣行動電話格式應為10碼");
-        }
-        
-        if (localTel && !/^(\+?\d{1,3}[-.\s]?)?(\(?\d{1,}\)?[-.\s]?)?[\d\s-]{6,14}$/.test(localTel) && !/^0\d{1,3}[-]?\d{6,8}(#\d{1,6})?$/.test(localTel)) {
-            errors.push("市內電話格式不符 ( 台灣市話請輸入含區碼，或含國碼 )");
-        }
-        
-        if (email && email.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { // Email 可選，但填寫了就要符合格式
-            errors.push("Email格式不符");
+            errors.push("台灣行動電話格式應為10碼。");
         }
 
         const messageElement = isEdit ? document.getElementById('edit-customer-message') : addMessage;
@@ -290,208 +356,240 @@ async function generateNewDisplayCustomerId() {
         return true;
     }
 
-
-    // --- Firestore 操作函數 ---
     async function handleSearchCustomer() {
-        if (!validateSearchInputs()) return;
-        displayGeneralMessage(searchMessage, "資料查詢中...", false);
-        const sNameVal = searchNameInput.value.trim();
-        const sPhoneVal = searchPhoneInput.value.trim();
-        let results = [];
-        const uniqueResultIds = new Set();
+        if (!validateSearchInputs()) return; // validateSearchInputs 現在允許客戶代號為1-6位數字
 
-        console.log(`[customers.js] Searching for Name: '${sNameVal}', Phone: '${sPhoneVal}'`);
+        displayGeneralMessage(searchMessage, "資料查詢中...", false);
+        if(searchResultsListContainer) searchResultsListContainer.classList.add("hidden");
+        if(searchResultsRowsContainer) searchResultsRowsContainer.innerHTML = '';
+
+        const sNameInputVal = searchNameInput.value.trim(); // 保留原始大小寫給後續處理
+        const sPhoneVal = searchPhoneInput.value.trim();
+        let sDisplayIdVal = searchDisplayIdInput ? searchDisplayIdInput.value.trim() : ''; // 獲取原始輸入
+
+        // ⭐ 自動補零邏輯 ⭐
+        if (sDisplayIdVal && /^\d{1,5}$/.test(sDisplayIdVal)) { // 如果是1到5位純數字
+            sDisplayIdVal = sDisplayIdVal.padStart(6, '0');
+            if(searchDisplayIdInput) searchDisplayIdInput.value = sDisplayIdVal; // 更新輸入框顯示補零後的值
+            console.log(`[customers.js] Padded displayId to: ${sDisplayIdVal}`);
+        }
+        // 此時 sDisplayIdVal 如果有效，應該是6位數字字串或空字串
+
+        let results = [];
+        
+        if (!db) {
+             displayGeneralMessage(searchMessage, "資料庫連接失敗。", true); return;
+        }
+        console.log(`[customers.js] Searching - Name: '${sNameInputVal}', Phone: '${sPhoneVal}', DisplayID (used for query): '${sDisplayIdVal}'`);
 
         try {
-            let phoneQueryMade = false;
-            if (sPhoneVal) {
-                // 1. 優先查 mobile
-                const mobileQuery = db.collection("customers").where("mobile", "==", sPhoneVal);
-                const mobileSnapshot = await mobileQuery.get();
-                console.log(`[customers.js] Mobile search for '${sPhoneVal}' found ${mobileSnapshot.size} results.`);
-                mobileSnapshot.forEach(doc => {
-                    if (!uniqueResultIds.has(doc.id)) {
-                        results.push({ firestoreId: doc.id, ...doc.data() });
-                        uniqueResultIds.add(doc.id);
+            let baseQuery = db.collection("customers");
+            let initialResults = [];
+            let queriesMade = 0;
+
+            // 查詢邏輯調整：優先使用客戶代號 (已補零)
+            if (sDisplayIdVal) { // 此時 sDisplayIdVal 應為6位數或空
+                queriesMade++;
+                const displayIdSnapshot = await baseQuery.where("displayCustomerId", "==", sDisplayIdVal).get();
+                displayIdSnapshot.forEach(doc => initialResults.push({ firestoreId: doc.id, ...doc.data() }));
+            }
+            // 其次使用電話查詢
+            else if (sPhoneVal) {
+                queriesMade++;
+                const mobileSnapshot = await baseQuery.where("mobile", "==", sPhoneVal).get();
+                mobileSnapshot.forEach(doc => initialResults.push({ firestoreId: doc.id, ...doc.data() }));
+            }
+            // 如果只有姓名查詢
+            else if (sNameInputVal) {
+                queriesMade++;
+                let nameSnapshot;
+                if (sNameInputVal.endsWith('*')) {
+                    const prefix = sNameInputVal.slice(0, -1);
+                    if (prefix) {
+                        nameSnapshot = await baseQuery.where("name", ">=", prefix)
+                                                    .where("name", "<=", prefix + '\uf8ff')
+                                                    .get();
+                    } else {
+                        nameSnapshot = await baseQuery.limit(50).get(); 
+                        displayGeneralMessage(searchMessage, "請提供更明確的姓名搜尋條件。", true);
+                    }
+                } else {
+                    nameSnapshot = await baseQuery.where("name", "==", sNameInputVal).get();
+                }
+                if (nameSnapshot) {
+                    nameSnapshot.forEach(doc => initialResults.push({ firestoreId: doc.id, ...doc.data() }));
+                }
+            }
+
+            results = initialResults;
+
+            // 如果同時有姓名和其他條件，對初步結果進行客戶端姓名篩選
+            if (sNameInputVal && (sDisplayIdVal || sPhoneVal) && results.length > 0) {
+                const nameFilterLower = sNameInputVal.toLowerCase();
+                results = results.filter(customer => {
+                    const customerNameLower = (customer.name || "").toLowerCase();
+                    if (nameFilterLower.includes('*')) {
+                        // 將使用者輸入的 * 轉換為正規表達式的 .*? (非貪婪匹配任何字符)
+                        // 並確保 ^ 和 $ 以匹配整個字串，除非使用者明確用 * 表示部分匹配
+                        // 為了簡單起見，這裡的 * 處理為 "包含" 模式下的萬用字元
+                        // 例如 "測*試" -> /^測.*?試$/i
+                        // 例如 "測試*" -> /^測試.*?$/i
+                        // 例如 "*測試" -> /^.*?測試$/i
+                        const regexPattern = nameFilterLower.split('*').map(part => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*?');
+                        const regex = new RegExp(`^${regexPattern}$`, 'i');
+                        return regex.test(customer.name || "");
+                    } else {
+                        return customerNameLower.includes(nameFilterLower);
                     }
                 });
-                phoneQueryMade = true;
-
-                // 2. 如果 mobile 沒找到，再查 localTel
-                if (results.length === 0) {
-                    const localTelQuery = db.collection("customers").where("localTel", "==", sPhoneVal);
-                    const localTelSnapshot = await localTelQuery.get();
-                    console.log(`[customers.js] LocalTel search for '${sPhoneVal}' found ${localTelSnapshot.size} results.`);
-                    localTelSnapshot.forEach(doc => {
-                        if (!uniqueResultIds.has(doc.id)) {
-                            results.push({ firestoreId: doc.id, ...doc.data() });
-                            uniqueResultIds.add(doc.id);
-                        }
-                    });
-                }
-            }
-
-            if (sNameVal) {
-                const nameQuery = db.collection("customers")
-                                    .where("name_lowercase", ">=", sNameVal.toLowerCase())
-                                    .where("name_lowercase", "<=", sNameVal.toLowerCase() + '\uf8ff');
-                const nameSnapshot = await nameQuery.get();
-                console.log(`[customers.js] Name search for '${sNameVal}' found ${nameSnapshot.size} results.`);
-                
-                if (phoneQueryMade && results.length > 0) { // 如果電話有結果，則用姓名篩選電話結果
-                    const nameFilteredResults = [];
-                    const nameSnapshotIds = new Set();
-                    nameSnapshot.forEach(doc => nameSnapshotIds.add(doc.id));
-
-                    results.forEach(r => {
-                        if (nameSnapshotIds.has(r.firestoreId)) { // 取交集
-                           if(r.name_lowercase && r.name_lowercase.includes(sNameVal.toLowerCase())){ // 再次確認包含
-                                nameFilteredResults.push(r);
-                           }
-                        }
-                    });
-                    results = nameFilteredResults;
-                     console.log(`[customers.js] Results after AND with name filter: ${results.length}`);
-                } else if (!phoneQueryMade || results.length === 0) { // 如果沒有電話查詢，或電話無結果，則直接用姓名查詢結果
-                    results = []; // 清空，因為之前的電話查詢是空的
-                    uniqueResultIds.clear();
-                    nameSnapshot.forEach(doc => {
-                        if (!uniqueResultIds.has(doc.id)) {
-                           results.push({ firestoreId: doc.id, ...doc.data() });
-                           uniqueResultIds.add(doc.id);
-                        }
-                    });
-                }
             }
             
+            // 去重
+            const uniqueResultsMap = new Map();
+            results.forEach(r => uniqueResultsMap.set(r.firestoreId, r));
+            results = Array.from(uniqueResultsMap.values());
+
+
             displayGeneralMessage(searchMessage, "", false);
             if (results.length === 1) {
+                if(searchResultsListContainer) searchResultsListContainer.classList.add("hidden");
                 await loadCustomerDataIntoUI(results[0].firestoreId);
                 showUiSection(customerDataSection, true);
             } else if (results.length > 1) {
-                displayGeneralMessage(searchMessage, `找到 ${results.length} 筆符合的客戶，請調整查詢條件。 (列表顯示功能待實現)`, false);
-                // TODO: 顯示 results 列表供使用者選擇
-                 // 暫時清除詳細資料區
                 if(addCustomerSection) addCustomerSection.classList.add("hidden");
                 if(customerDataSection) customerDataSection.classList.add("hidden");
-            } else {
+                
+                let listHtml = '';
+                results.sort((a,b) => (a.name || "").localeCompare(b.name || ""));
+                results.forEach(result => {
+                    listHtml += `
+                        <div class="grid grid-cols-[1fr_2fr_1.5fr_auto] gap-x-2 items-center py-2.5 border-b border-gray-100 text-sm hover:bg-gray-50 cursor-pointer select-customer-row" data-id="${result.firestoreId}">
+                            <span>${result.displayCustomerId || 'N/A'}</span>
+                            <span>${result.name || 'N/A'}</span>
+                            <span>${result.mobile || 'N/A'}</span>
+                            <span class="text-right">
+                                <button class="action-button select-customer-from-list-btn text-xs" data-id="${result.firestoreId}">選取</button>
+                            </span>
+                        </div>`;
+                });
+                if(searchResultsRowsContainer) searchResultsRowsContainer.innerHTML = listHtml;
+                if(searchResultsListContainer) searchResultsListContainer.classList.remove("hidden");
+
+                if(searchResultsRowsContainer) {
+                    searchResultsRowsContainer.querySelectorAll('.select-customer-from-list-btn, .select-customer-row').forEach(el => {
+                        el.addEventListener('click', async function(event) {
+                            event.stopPropagation();
+                            const customerId = this.dataset.id || this.closest('.select-customer-row')?.dataset.id;
+                            if (customerId) {
+                                if(searchResultsListContainer) searchResultsListContainer.classList.add("hidden");
+                                if(searchResultsRowsContainer) searchResultsRowsContainer.innerHTML = '';
+                                await loadCustomerDataIntoUI(customerId);
+                                showUiSection(customerDataSection, true);
+                            }
+                        });
+                    });
+                }
+
+            } else { // results.length === 0
+                if(searchResultsListContainer) searchResultsListContainer.classList.add("hidden");
                 displayGeneralMessage(searchMessage, "查無客戶資料，您可以直接新增。", false);
                 clearAddCustomerForm();
-                if(addNameInput && sNameVal) addNameInput.value = sNameVal;
-                if(addMobileInput && sPhoneVal) addMobileInput.value = sPhoneVal; 
+                if(addNameInput && searchNameInput.value.trim()) addNameInput.value = searchNameInput.value.trim();
+                if(addMobileInput && searchPhoneInput.value.trim()) addMobileInput.value = searchPhoneInput.value.trim();
                 showUiSection(addCustomerSection, true);
                 if(customerDataSection) customerDataSection.classList.add("hidden");
             }
         } catch (error) {
             console.error("[customers.js] 搜尋客戶錯誤:", error);
             displayGeneralMessage(searchMessage, `查詢錯誤: ${error.message}`, true);
+            if(searchResultsListContainer) searchResultsListContainer.classList.add("hidden");
         }
     }
 
     async function handleCreateCustomer() {
         if (!validateAddOrEditCustomerInputs(false)) return;
-        displayGeneralMessage(addMessage, "資料建立中...", false);
+        displayGeneralMessage(addMessage, "準備資料中...", false);
         const editorName = getCurrentEditorName();
-
         try {
             const displayId = await generateNewDisplayCustomerId();
-            if (!displayId) {
-                displayGeneralMessage(addMessage, "產生客戶顯示ID失敗，請重試或聯繫管理員。", true);
-                return;
-            }
-
             const birthDateValue = addBirthInput.value;
-            const newCustomerData = {
+            const birthDateString = birthDateValue || null;
+            const newCustomerDataForParent = {
                 displayCustomerId: displayId,
                 name: addNameInput.value.trim(),
-                name_lowercase: addNameInput.value.trim().toLowerCase(),
-                gender: document.querySelector('input[name="add-gender"]:checked').value,
+                // name_lowercase: addNameInput.value.trim().toLowerCase(), // 已移除
+                displayName: addDisplayNameInput.value.trim() || null,
+                gender: document.querySelector('input[name="add-gender"]:checked') ? document.querySelector('input[name="add-gender"]:checked').value : null,
                 mobile: addMobileInput.value.trim(),
-                localTel: addLocalTelInput.value.trim(),
-                email: addEmailInput.value.trim().toLowerCase(),
-                birthDate: birthDateValue ? firebase.firestore.Timestamp.fromDate(new Date(birthDateValue)) : null,
+                birthDate: birthDateString,
                 lineUid: null,
-                createdAt: serverTimestamp(),
                 createdBy: editorName,
-                updatedAt: serverTimestamp(),
                 updatedBy: editorName
             };
-
-            const newCustomerRef = db.collection("customers").doc();
-            await newCustomerRef.set(newCustomerData);
-            
-            displayGeneralMessage(addMessage, `客戶 ${displayId} (${newCustomerData.name}) 資料已成功建立！`, false);
-            setTimeout(async () => {
-                clearAddCustomerForm();
-                await loadCustomerDataIntoUI(newCustomerRef.id);
-                showUiSection(customerDataSection, true);
-            }, 1500);
-
+            window.parent.postMessage({ type: 'SAVE_NEW_CUSTOMER', payload: newCustomerDataForParent }, window.parent.location.origin);
+            displayGeneralMessage(addMessage, "資料傳送中，請稍候...", false);
         } catch (error) {
-            console.error("[customers.js] 建立客戶時發生錯誤:", error);
-            displayGeneralMessage(addMessage, `建立錯誤: ${error.message}`, true);
+            displayGeneralMessage(addMessage, `準備資料時發生錯誤: ${error.message}`, true);
         }
     }
     
-    function clearSearchForm() {
+    function clearSearchForm() { // 更新：包含 displayId, 並隱藏結果列表
         if(searchNameInput) searchNameInput.value = '';
         if(searchPhoneInput) searchPhoneInput.value = '';
-        // if(searchEmailInput) searchEmailInput.value = ''; // Email 搜尋已移除
+        if(searchDisplayIdInput) searchDisplayIdInput.value = ''; // 新增
         displayGeneralMessage(searchMessage, '', false);
+        if(searchResultsListContainer) searchResultsListContainer.classList.add("hidden");
+        if(searchResultsRowsContainer) searchResultsRowsContainer.innerHTML = '';
     }
 
-    function clearAddCustomerForm() {
+    function clearAddCustomerForm() { // 更新：加入 displayName, 移除 localTel, email
         if(addNameInput) addNameInput.value = '';
+        if(addDisplayNameInput) addDisplayNameInput.value = ''; // 新增
         const addGenderMale = document.getElementById('add-gender-male');
-        if (addGenderMale) addGenderMale.checked = true; // 預設選男性或其他
+        if (addGenderMale) addGenderMale.checked = true;
         else { document.querySelectorAll('input[name="add-gender"]').forEach(r => r.checked = false); }
-
         if(addMobileInput) addMobileInput.value = '';
-        if(addLocalTelInput) addLocalTelInput.value = '';
-        if(addEmailInput) addEmailInput.value = '';
+        // if(addLocalTelInput) addLocalTelInput.value = ''; // 移除
+        // if(addEmailInput) addEmailInput.value = '';       // 移除
         if(addBirthInput) addBirthInput.value = '';
         displayGeneralMessage(addMessage, "", false);
     }
 
-    async function loadCustomerDataIntoUI(docId) {
-        if (!docId) {
-            console.error("[customers.js] loadCustomerDataIntoUI: 無效的 docId");
-            return;
+    async function loadCustomerDataIntoUI(docId) { // 更新：載入時隱藏結果列表
+        if (!docId) { console.error("[customers.js] loadCustomerDataIntoUI: 無效的 docId"); return; }
+        if (!db) {
+             if(customerInfoContent) customerInfoContent.innerHTML = `<p class='error-text p-4'>資料庫連接失敗。</p>`; return;
         }
-        currentLoadedCustomerId = docId; // 保存當前載入客戶的 Firestore ID
-        console.log(`[customers.js] Loading data for customer Firestore doc ID: ${docId}`);
+        if(searchResultsListContainer) searchResultsListContainer.classList.add("hidden");
+
+        currentLoadedCustomerId = docId;
+        assessmentsLoaded = false;
         if(customerDocIdHolder) customerDocIdHolder.value = docId;
-        
+
         if(customerInfoContent) customerInfoContent.innerHTML = "<p class='text-base p-4'>載入客戶資料中...</p>";
         if(treatmentHistoryContent) treatmentHistoryContent.innerHTML = "<p class='text-base p-4'>載入療程紀錄中...</p>";
         if(appointmentHistoryContent) appointmentHistoryContent.innerHTML = "<p class='text-base p-4'>載入預約紀錄中...</p>";
-        if(assessmentHistoryContent) assessmentHistoryContent.innerHTML = "<p class='text-base p-4'>載入問卷紀錄中...</p>";
-        
-        toggleCustomerInfoEditMode(false); 
-        if(addTreatmentFormContainer) addTreatmentFormContainer.classList.add('hidden'); 
+        if(assessmentHistoryContent) assessmentHistoryContent.innerHTML = "<p class='text-base p-4'>問卷紀錄待載入...</p>";
+        if (assessmentRecordsSection) assessmentRecordsSection.classList.add("hidden");
+
+        toggleCustomerInfoEditMode(false);
+        if(addTreatmentFormContainer) addTreatmentFormContainer.classList.add('hidden');
 
         try {
             const customerDoc = await db.collection("customers").doc(docId).get();
-            if (!customerDoc.exists) {
-                throw new Error(`客戶資料 (ID: ${docId}) 不存在。`);
-            }
+            if (!customerDoc.exists) throw new Error(`客戶資料 (ID: ${docId}) 不存在。`);
+            
             const customerInfo = { firestoreId: customerDoc.id, ...customerDoc.data() };
-            currentEditingCustomerData = JSON.parse(JSON.stringify(customerInfo)); // 保存一份原始數據用於編輯比較
-            if(currentLineUidHolder) currentLineUidHolder.value = customerInfo.lineUid || ""; 
-            renderCustomerInfo(customerInfo, false);
+            currentEditingCustomerData = JSON.parse(JSON.stringify(customerInfo));
+            if(currentLineUidHolder) currentLineUidHolder.value = customerInfo.lineUid || "";
+            renderCustomerInfo(customerInfo, false); // 使用更新後的 renderCustomerInfo
 
-            // 載入療程套票
             const packagesSnapshot = await db.collection("customerTreatmentPackages")
                                             .where("customerId", "==", docId)
                                             .orderBy("purchaseDate", "desc")
                                             .get();
-            allCustomerTreatments = [];
-            packagesSnapshot.forEach(doc => {
-                allCustomerTreatments.push({ id: doc.id, ...doc.data() });
-            });
-            renderTreatmentHistory();
-
-            // 載入該客戶所有預約 (跨套票)
+            allCustomerTreatments = packagesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            
             allCustomerAppointments = [];
             for (const pkg of allCustomerTreatments) {
                 const apptsSnapshot = await db.collection("customerTreatmentPackages").doc(pkg.id).collection("appointments").get();
@@ -499,24 +597,15 @@ async function generateNewDisplayCustomerId() {
                     allCustomerAppointments.push({
                         id: apptDoc.id,
                         packageId: pkg.id,
-                        treatmentName: pkg.treatmentName, // 從套票中獲取療程名稱
+                        treatmentName: pkg.treatmentName, // 保留用於顯示
                         ...apptDoc.data()
                     });
                 });
             }
-            renderAppointmentHistory(null, true); // 初始顯示該客戶所有預約
+            allCustomerAppointments = calculateAppointmentSequences(allCustomerAppointments, allCustomerTreatments); // 計算次數
+            renderTreatmentHistory(); // 使用更新後的 renderTreatmentHistory
+            renderAppointmentHistory(null, true); // 使用更新後的 renderAppointmentHistory
 
-            // 載入問卷記錄
-            const assessmentsSnapshot = await db.collection("assessmentRecords")
-                                                 .where("customerId", "==", docId) // 假設問卷記錄中有 customerId (Firestore Doc ID)
-                                                 .orderBy("submittedAt", "desc")
-                                                 .get();
-            allCustomerAssessments = [];
-            assessmentsSnapshot.forEach(doc => {
-                allCustomerAssessments.push({ id: doc.id, ...doc.data() });
-            });
-            renderAssessmentHistory();
-            
         } catch (error) {
             console.error("[customers.js] 載入客戶完整資料失敗:", error);
             if(customerInfoContent) customerInfoContent.innerHTML = `<p class='error-text p-4'>載入客戶資料失敗: ${error.message}</p>`;
@@ -525,27 +614,72 @@ async function generateNewDisplayCustomerId() {
             if(assessmentHistoryContent) assessmentHistoryContent.innerHTML = "";
         }
     }
+    
+    // 更新：計算預約次數 (第 X 次 / 共 Y 次)
+    function calculateAppointmentSequences(appointments, packages) {
+        const packageMap = new Map(packages.map(p => [p.id, { purchasedUnits: p.purchasedUnits }]));
+        const appointmentsWithDetails = [];
+        const appointmentsByPackage = {}; // Group appointments by packageId
 
+        // Group appointments by packageId
+        appointments.forEach(appt => {
+            if (!appointmentsByPackage[appt.packageId]) {
+                appointmentsByPackage[appt.packageId] = [];
+            }
+            appointmentsByPackage[appt.packageId].push(appt);
+        });
+
+        for (const packageId in appointmentsByPackage) {
+            const pkgDetails = packageMap.get(packageId);
+            if (!pkgDetails) continue;
+
+            // Sort appointments within this package by date
+            let sortedAppointments = [...appointmentsByPackage[packageId]]
+                .sort((a, b) => (a.appointmentDateTime.seconds || 0) - (b.appointmentDateTime.seconds || 0));
+            
+            let sequenceCounter = 0;
+            sortedAppointments.forEach(appt => {
+                let currentSequence = null;
+                if (appt.status !== "已取消") { // Only count non-cancelled appointments for sequence
+                    sequenceCounter++;
+                    currentSequence = sequenceCounter;
+                }
+                appointmentsWithDetails.push({
+                    ...appt,
+                    sequence: currentSequence, // Will be null for "已取消" if we only want sequence for used slots
+                    packagePurchasedUnits: pkgDetails.purchasedUnits
+                });
+            });
+        }
+        return appointmentsWithDetails;
+    }
+
+    // 更新：客戶基本資料的渲染邏輯 (2x3 佈局，新舊欄位)
     function renderCustomerInfo(info, isEditing = false) {
-        // ... (此函數的渲染邏輯與您之前提供的版本相似)
-        // 注意：info.birthDate 會是 Firestore Timestamp，使用 convertFirestoreTimestampToInputDate 處理
-        //       info.id 現在是 Firestore 自動產生的ID，顯示時使用 info.displayCustomerId
-        if (!info) { 
+        if (!info) {
             if(customerInfoContent) customerInfoContent.innerHTML = "<p class='error-text p-4'>無法載入客戶詳細資料。</p>";
             return;
         }
         const lineIconSrc = info.lineUid ? LINE_ICON_URL : LINE_ICON_GRAY_URL;
         const lineStatusText = info.lineUid ? '已綁定LINE' : '未綁定LINE';
         const customerDisplayIdText = info.displayCustomerId || 'N/A';
-        const customerIdDisplayHtml = `<p class="customer-id-display text-xs text-gray-400">ID: ${customerDisplayIdText} (Ref: ${info.firestoreId})</p>`;
-        const isLineInitiallyBound = !!info.lineUid; 
+        const customerIdDisplayHtml = `<p class="customer-id-display text-xs text-gray-400">客戶代號: ${customerDisplayIdText} (Ref: ${info.firestoreId})</p>`;
+        const isLineInitiallyBound = !!info.lineUid;
 
         if (isEditing) {
             if(customerInfoContent) customerInfoContent.innerHTML = `
                 ${customerIdDisplayHtml}
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 text-base items-baseline">
-                    <div><input id="edit-customer-name" class="custom-form-input customer-info-field" value="${info.name || ''}" placeholder="客戶姓名"></div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4 text-base items-baseline">
                     <div>
+                        <label for="edit-customer-name" class="form-label sr-only">客戶姓名</label>
+                        <input id="edit-customer-name" class="custom-form-input customer-info-field" value="${info.name || ''}" placeholder="客戶姓名 (*)">
+                    </div>
+                    <div>
+                        <label for="edit-customer-display-name" class="form-label sr-only">客戶暱稱</label>
+                        <input id="edit-customer-display-name" class="custom-form-input customer-info-field" value="${info.displayName || ''}" placeholder="客戶暱稱">
+                    </div>
+                    <div>
+                        <p class="form-label text-sm text-gray-700 mb-1 md:mb-0">性別</p>
                         <div class="flex gap-x-3 capsule-radio-group">
                             <input type="radio" name="edit-gender" value="Male" id="edit-gender-male" class="custom-form-input" ${info.gender === 'Male' ? 'checked' : ''}>
                             <label for="edit-gender-male" class="capsule-radio-label">男 Male</label>
@@ -555,15 +689,16 @@ async function generateNewDisplayCustomerId() {
                             <label for="edit-gender-other" class="capsule-radio-label">其他 Other</label>
                         </div>
                     </div>
-                    <div><input id="edit-customer-mobile" class="custom-form-input customer-info-field" value="${info.mobile || ''}" placeholder="行動電話"></div>
-                    <div><input id="edit-customer-localtel" class="custom-form-input customer-info-field" value="${info.localTel || ''}" placeholder="市內電話"></div>
-                    <div><input id="edit-customer-email" class="custom-form-input customer-info-field lowercase-email" value="${info.email || ''}" placeholder="電子郵件" type="email"></div>
+                    <div>
+                        <label for="edit-customer-mobile" class="form-label sr-only">行動電話</label>
+                        <input id="edit-customer-mobile" class="custom-form-input customer-info-field" value="${info.mobile || ''}" placeholder="行動電話 (*)">
+                    </div>
                     <div>
                         <label for="edit-customer-birth" class="form-label sr-only">出生日期</label>
                         <input type="date" id="edit-customer-birth" title="出生日期" class="custom-form-input customer-info-field" value="${convertFirestoreTimestampToInputDate(info.birthDate) || ''}">
                     </div>
                     <div>
-                        <label class="form-label">LINE 狀態:</label>
+                        <label class="form-label text-sm text-gray-700 mb-1 md:mb-0">LINE 狀態:</label>
                         <select id="edit-customer-line-status" class="custom-form-input customer-info-field" ${!isLineInitiallyBound ? 'disabled title="未綁定狀態不可於此更改"' : ''}>
                             <option value="linked" ${info.lineUid ? 'selected' : ''}>已綁定</option>
                             <option value="unlinked" ${!info.lineUid ? 'selected' : ''} ${!isLineInitiallyBound ? 'disabled' : ''}>解除綁定</option>
@@ -572,51 +707,43 @@ async function generateNewDisplayCustomerId() {
                     </div>
                 </div>
                 <p id="edit-customer-message" class="mt-2 text-sm"></p>`;
-            const editEmailField = document.getElementById('edit-customer-email');
-            if (editEmailField) {
-                editEmailField.addEventListener('input', handleEmailInputToLowercase);
-            }
+            // 移除 email 欄位的 toLowerCase 事件監聽器，因為 email 欄位已從此表單移除
         } else {
              if(customerInfoContent) customerInfoContent.innerHTML = `
                 ${customerIdDisplayHtml}
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4 text-base items-baseline">
-                    <div><span class="font-semibold inline-block min-w-[6.5em]">客戶姓名:</span> <span class="customer-info-field-ro">${info.name || 'N/A'}</span></div>
-                    <div><span class="font-semibold inline-block min-w-[6.5em]">客戶性別:</span> <span class="customer-info-field-ro">${info.gender || 'N/A'}</span></div>
-                    <div><span class="font-semibold inline-block min-w-[6.5em]">出生日期:</span> <span class="customer-info-field-ro">${convertFirestoreTimestampToInputDate(info.birthDate) || 'N/A'}</span></div>
-                    <div><span class="font-semibold inline-block min-w-[6.5em]">行動電話:</span> <span class="customer-info-field-ro">${info.mobile || 'N/A'}</span></div>
-                    <div><span class="font-semibold inline-block min-w-[6.5em]">市內電話:</span> <span class="customer-info-field-ro">${info.localTel || 'N/A'}</span></div>
-                    <div></div> 
-                    <div><span class="font-semibold inline-block min-w-[6.5em]">電子郵件:</span> <span class="customer-info-field-ro">${info.email || 'N/A'}</span></div>
-                    <div class="flex items-baseline"> 
-                      <span class="font-semibold inline-block min-w-[6.5em] shrink-0">LINE帳號:</span>
+                    <div><span class="font-semibold inline-block min-w-[5em]">客戶姓名:</span> <span class="customer-info-field-ro">${info.name || 'N/A'}</span></div>
+                    <div><span class="font-semibold inline-block min-w-[5em]">客戶暱稱:</span> <span class="customer-info-field-ro">${info.displayName || 'N/A'}</span></div>
+                    <div><span class="font-semibold inline-block min-w-[5em]">客戶性別:</span> <span class="customer-info-field-ro">${info.gender || 'N/A'}</span></div>
+                    
+                    <div><span class="font-semibold inline-block min-w-[5em]">行動電話:</span> <span class="customer-info-field-ro">${info.mobile || 'N/A'}</span></div>
+                    <div><span class="font-semibold inline-block min-w-[5em]">出生日期:</span> <span class="customer-info-field-ro">${convertFirestoreTimestampToInputDate(info.birthDate) || 'N/A'}</span></div>
+                    <div class="flex items-baseline">
+                      <span class="font-semibold inline-block min-w-[5em] shrink-0">LINE帳號:</span>
                       <span class="inline-flex items-center customer-info-field-ro">
-                        ${lineStatusText} 
+                        ${lineStatusText}
                         <img src="${lineIconSrc}" alt="Line Status" class="line-icon ml-1">
                       </span>
                     </div>
                 </div>`;
         }
     }
-    
+
     function toggleCustomerInfoEditMode(enableEditing) {
-        // ... (此函數的邏輯與您之前提供的版本相似，確保 currentLoadedCustomerId 有值)
-        const customerFirestoreId = currentLoadedCustomerId; // 使用保存的 Firestore ID
+        const customerFirestoreId = currentLoadedCustomerId;
         const editMsgElement = document.getElementById('edit-customer-message');
-        
+
         if(editCustomerButtonHeader) editCustomerButtonHeader.classList.toggle('hidden', enableEditing);
         if(customerInfoActionsFooter) customerInfoActionsFooter.classList.toggle('hidden', !enableEditing);
 
         if (!customerFirestoreId && enableEditing) {
             displayGeneralMessage(editMsgElement || searchMessage, "沒有客戶資料可編輯。", true);
             if(customerInfoActionsFooter) customerInfoActionsFooter.classList.add('hidden');
-            if(editCustomerButtonHeader) editCustomerButtonHeader.classList.remove('hidden'); 
+            if(editCustomerButtonHeader) editCustomerButtonHeader.classList.remove('hidden');
             return;
         }
-        
         if (enableEditing) {
-            // currentEditingCustomerData 應該已在 loadCustomerDataIntoUI 或上次儲存後更新
             if (!currentEditingCustomerData || currentEditingCustomerData.firestoreId !== customerFirestoreId) {
-                 console.error("[customers.js] Mismatch or missing currentEditingCustomerData for edit. Re-fetch or error.");
                  displayGeneralMessage(editMsgElement || searchMessage, "編輯錯誤：客戶資料不一致。", true);
                  if(customerInfoActionsFooter) customerInfoActionsFooter.classList.add('hidden');
                  if(editCustomerButtonHeader) editCustomerButtonHeader.classList.remove('hidden');
@@ -624,16 +751,12 @@ async function generateNewDisplayCustomerId() {
             }
             renderCustomerInfo(currentEditingCustomerData, true);
         } else {
-            // 取消或儲存後，currentEditingCustomerData 應為最新狀態
             if (currentEditingCustomerData && currentEditingCustomerData.firestoreId === customerFirestoreId) {
-                 renderCustomerInfo(currentEditingCustomerData, false); 
-            } else if (customerFirestoreId) { // 如果 currentEditingCustomerData 不對，嘗試重新載入
-                 console.warn("[customers.js] currentEditingCustomerData stale on cancel/save, attempting re-render from a fresh load (not implemented here, should use loadCustomerDataIntoUI).");
-                 // 理想情況是 loadCustomerDataIntoUI(customerFirestoreId) 但這會觸發多次讀取。
-                 // 簡單處理：如果 currentEditingCustomerData 丟失，顯示錯誤。
+                 renderCustomerInfo(currentEditingCustomerData, false);
+            } else if (customerFirestoreId) {
                  if (customerInfoContent) customerInfoContent.innerHTML = "<p class='error-text p-4'>顯示錯誤，請重新查詢客戶。</p>";
             }
-            if (editMsgElement) displayGeneralMessage(editMsgElement, '', false); 
+            if (editMsgElement) displayGeneralMessage(editMsgElement, '', false);
         }
     }
 
@@ -641,546 +764,490 @@ async function generateNewDisplayCustomerId() {
         if (!validateAddOrEditCustomerInputs(true)) return;
         const customerFirestoreId = currentLoadedCustomerId;
         if (!customerFirestoreId) {
-            displayGeneralMessage(document.getElementById('edit-customer-message'), "錯誤：未指定客戶ID。", true);
-            return;
+            displayGeneralMessage(document.getElementById('edit-customer-message'), "錯誤：未指定客戶ID。", true); return;
         }
         const editorName = getCurrentEditorName();
-        const editMsgElement = document.getElementById('edit-customer-message');
         const lineStatusSelect = document.getElementById('edit-customer-line-status');
-
         const birthDateValue = document.getElementById('edit-customer-birth').value;
-        const updatedFields = { 
+        const birthDateString = birthDateValue || null;
+        const updatedFieldsForParent = {
+            firestoreId: customerFirestoreId,
             name: document.getElementById('edit-customer-name').value.trim(),
-            name_lowercase: document.getElementById('edit-customer-name').value.trim().toLowerCase(),
-            gender: document.querySelector('input[name="edit-gender"]:checked')?.value,
-            birthDate: birthDateValue ? firebase.firestore.Timestamp.fromDate(new Date(birthDateValue)) : null,
+            // name_lowercase: document.getElementById('edit-customer-name').value.trim().toLowerCase(), // 已移除
+            displayName: document.getElementById('edit-customer-display-name').value.trim() || null,
+            gender: document.querySelector('input[name="edit-gender"]:checked')?.value || null,
+            birthDate: birthDateString,
             mobile: document.getElementById('edit-customer-mobile').value.trim(),
-            localTel: document.getElementById('edit-customer-localtel').value.trim(),
-            email: document.getElementById('edit-customer-email').value.trim().toLowerCase(),
-            updatedAt: serverTimestamp(),
-            updatedBy: editorName
+            updatedBy: editorName,
+            lineUidAction: (lineStatusSelect && !lineStatusSelect.disabled && lineStatusSelect.value === "unlinked" && currentEditingCustomerData.lineUid !== null) ? 'unlink' : 'keep'
         };
-
-        // LINE UID 處理: 只有在可編輯且選擇 "解除綁定" 時才設為 null
-        // 綁定操作應由其他流程 (例如 LINE LIFF) 處理並更新 lineUid，此處不直接修改 lineUid 除非是解除
-        if (lineStatusSelect && !lineStatusSelect.disabled && lineStatusSelect.value === "unlinked") {
-            if (currentEditingCustomerData.lineUid !== null) { // 只有在原本有綁定時，解除綁定才算變更
-                 updatedFields.lineUid = null;
-            }
-        }
-        
-        // 比較是否有實際變動 (不比較 updatedAt, updatedBy)
-        let hasChanged = false;
-        const fieldsToCompare = ['name', 'gender', 'birthDate', 'mobile', 'localTel', 'email', 'lineUid'];
-        for (const key of fieldsToCompare) {
-            let originalValue = currentEditingCustomerData[key];
-            let updatedValue = updatedFields[key];
-
-            if (key === 'birthDate') { // Timestamp 比較特殊
-                const originalDateStr = originalValue ? convertFirestoreTimestampToInputDate(originalValue) : "";
-                const updatedDateStr = updatedValue ? convertFirestoreTimestampToInputDate(updatedValue) : (birthDateValue || ""); // Use input value if timestamp is null
-                if (originalDateStr !== updatedDateStr) {
-                    hasChanged = true; break;
-                }
-            } else if (originalValue !== updatedValue) {
-                 // 處理 null, undefined, "" 都視為相同 "空值" 的情況
-                 const originalIsEmpty = originalValue === null || originalValue === undefined || originalValue === "";
-                 const updatedIsEmpty = updatedValue === null || updatedValue === undefined || updatedValue === "";
-                 if (!(originalIsEmpty && updatedIsEmpty)) { // 只有在不都是空值的情況下，不相等才算變更
-                    hasChanged = true; break;
-                 }
-            }
-        }
-
-
-        if (!hasChanged) {
-            displayGeneralMessage(editMsgElement, "資料未變動。", false);
-             setTimeout(() => { 
-                 toggleCustomerInfoEditMode(false);
-            }, 1500);
-            return;
-        }
-
-        if(saveCustomerChangesButton) {
-            saveCustomerChangesButton.textContent = "儲存中...";
-            saveCustomerChangesButton.disabled = true;
-        }
+        if(saveCustomerChangesButton) { saveCustomerChangesButton.textContent = "傳送中..."; saveCustomerChangesButton.disabled = true; }
         if(cancelEditCustomerButton) cancelEditCustomerButton.disabled = true;
-
-        try {
-            await db.collection("customers").doc(customerFirestoreId).update(updatedFields);
-            
-            // 更新本地 currentEditingCustomerData 以反映儲存的變更
-            // 注意：serverTimestamp() 不會立即在客戶端解析，所以 updatedAt 會是特殊物件
-            // 為了 UI 即時更新，可以手動模擬或重新讀取
-            const tempUpdatedAt = new Date(); // 模擬客戶端時間
-            currentEditingCustomerData = { 
-                ...currentEditingCustomerData, 
-                ...updatedFields, 
-                updatedAt: { toDate: () => tempUpdatedAt } // 模擬 Timestamp 物件
-            };
-            // 如果 lineUid 被設為 null
-            if (updatedFields.hasOwnProperty('lineUid') && updatedFields.lineUid === null) {
-                currentEditingCustomerData.lineUid = null;
-            }
-
-
-            displayGeneralMessage(editMsgElement, "客戶資料已成功更新！", false);
-            setTimeout(() => {
-                toggleCustomerInfoEditMode(false); 
-            }, 1000);
-        } catch (error) {
-            console.error("[customers.js] 更新客戶資料失敗:", error);
-            displayGeneralMessage(editMsgElement, `更新失敗: ${error.message}`, true);
-        } finally {
-            if(saveCustomerChangesButton) {
-                 saveCustomerChangesButton.textContent = "儲存"; 
-                 saveCustomerChangesButton.disabled = false;
-            }
-            if(cancelEditCustomerButton) cancelEditCustomerButton.disabled = false;
-        }
+        window.parent.postMessage({ type: 'SAVE_CUSTOMER_CHANGES', payload: updatedFieldsForParent }, window.parent.location.origin);
     }
-    
+
     // --- 療程購買和預約相關函數 ---
-    function populateTreatmentCategories() { /* ...與您版本相同... */ 
+    function populateTreatmentCategories() {
         if (!addTreatmentCategorySelect) return;
         const categories = [...new Set(treatmentDataStructure.map(item => item.category))];
         addTreatmentCategorySelect.innerHTML = '<option value="">請選擇類別</option>';
         categories.forEach(category => {
             const option = document.createElement('option');
-            option.value = category;
-            option.textContent = category;
+            option.value = category; option.textContent = category;
             addTreatmentCategorySelect.appendChild(option);
         });
-        populateTreatmentNames(); 
+        populateTreatmentNames();
     }
-    function populateTreatmentNames() { /* ...與您版本相同... */ 
+
+    function populateTreatmentNames() {
         if (!addTreatmentCategorySelect || !addTreatmentNameSelect || !addTreatmentCountInput) return;
         const selectedCategory = addTreatmentCategorySelect.value;
         addTreatmentNameSelect.innerHTML = '<option value="">請選擇療程</option>';
-        addTreatmentCountInput.value = ''; 
+        addTreatmentCountInput.value = ''; // 清空購買數量
+        if(addTreatmentAmountInput) addTreatmentAmountInput.value = ''; // 清空金額
         if (selectedCategory) {
             treatmentDataStructure
                 .filter(item => item.category === selectedCategory)
                 .forEach(item => {
                     const option = document.createElement('option');
-                    option.value = item.name; 
-                    option.textContent = item.name;
-                    option.dataset.defaultTimes = item.times; 
+                    option.value = item.name; option.textContent = item.name;
+                    option.dataset.defaultTimes = item.times;
                     addTreatmentNameSelect.appendChild(option);
                 });
         }
-         handleTreatmentNameChange();
+        handleTreatmentNameChange();
     }
-    function handleTreatmentNameChange() { /* ...與您版本相同... */ 
+
+    function handleTreatmentNameChange() {
         if (!addTreatmentNameSelect || !addTreatmentCountInput) return;
         const selectedOption = addTreatmentNameSelect.options[addTreatmentNameSelect.selectedIndex];
         if (selectedOption && selectedOption.dataset.defaultTimes) {
             addTreatmentCountInput.value = selectedOption.dataset.defaultTimes;
         } else {
-            addTreatmentCountInput.value = '1'; 
+            addTreatmentCountInput.value = '1';
         }
     }
-    
-    async function handleAddTreatmentPurchase() {
+
+    async function handleAddTreatmentPurchase() { // 更新：加入 amount
         const customerFirestoreId = currentLoadedCustomerId;
-        if (!customerFirestoreId) {
-            displayGeneralMessage(addTreatmentMessage, "錯誤：未選擇客戶。", true);
-            return;
-        }
+        if (!customerFirestoreId) { displayGeneralMessage(addTreatmentMessage, "錯誤：未選擇客戶。", true); return; }
         const editorName = getCurrentEditorName();
-        const customerData = currentEditingCustomerData; // 應包含 displayCustomerId 和 name
+        const customerData = currentEditingCustomerData;
 
         const category = addTreatmentCategorySelect.value;
         const name = addTreatmentNameSelect.value;
         const purchasedUnits = parseInt(addTreatmentCountInput.value);
+        const amountStr = addTreatmentAmountInput ? addTreatmentAmountInput.value.trim() : ''; // 新增：讀取金額
+        const amount = amountStr ? parseFloat(amountStr) : null; // 新增：轉換金額
         const firstUseDateTimeStr = addTreatmentFirstUseDateTimeInput.value;
 
         if (!category || !name || !purchasedUnits || purchasedUnits <= 0 || !firstUseDateTimeStr) {
-            displayGeneralMessage(addTreatmentMessage, "請填寫完整的療程類別、名稱、數量及首次預約日期。", true);
-            return;
+            displayGeneralMessage(addTreatmentMessage, "請填寫完整的療程類別、名稱、數量及首次預約日期。", true); return;
         }
-        displayGeneralMessage(addTreatmentMessage, "處理中...", false);
-        const firstUseDate = new Date(firstUseDateTimeStr);
+        if (addTreatmentAmountInput && amount !== null && isNaN(amount)) { // 新增：金額格式驗證
+            displayGeneralMessage(addTreatmentMessage, "購買金額格式不正確。", true); return;
+        }
 
         const treatmentDetails = treatmentDataStructure.find(t => t.name === name && t.category === category);
-        if (!treatmentDetails) {
-            displayGeneralMessage(addTreatmentMessage, "錯誤：找不到所選療程的詳細設定。", true);
-            return;
-        }
+        if (!treatmentDetails) { displayGeneralMessage(addTreatmentMessage, "錯誤：找不到所選療程設定。", true); return; }
+        
         const durationMinutes = treatmentDetails.durationMinutes || 30;
         let defaultRoom = treatmentDetails.room || "診療室";
 
-        const newPackageRef = db.collection("customerTreatmentPackages").doc();
-        const firstAppointmentRef = newPackageRef.collection("appointments").doc();
-
-        try {
-            // Firestore 交易開始
-            await db.runTransaction(async (transaction) => {
-                // 點滴室分配和衝突檢查邏輯 (極度簡化，真實系統中需要更複雜的實現)
-                if (defaultRoom === "點滴室") {
-                    console.warn("[customers.js] 點滴室動態分配及衝突檢查邏輯尚未完整實現，預設使用 '點滴室1'");
-                    // 在真實情境中，這裡需要異步查詢可用點滴室 (可能需要在交易外預先檢查)
-                    // const availableDripRoom = await findAvailableDripRoom(db, firstUseDate, durationMinutes /*, transaction (if reads are part of it) */);
-                    // if (!availableDripRoom) throw new Error("目前所有點滴室在該時段均已預約滿，請選擇其他時間。");
-                    // defaultRoom = availableDripRoom;
-                    defaultRoom = "點滴室1"; // 暫時預設
-                } else {
-                    // 其他房間的衝突檢查 (也需要異步查詢)
-                    // const isOccupied = await checkRoomOccupancy(db, defaultRoom, firstUseDate, durationMinutes);
-                    // if (isOccupied) throw new Error(`${defaultRoom} 在該時段已被預約，請選擇其他時間。`);
-                    console.warn(`[customers.js] ${defaultRoom} 的衝突檢查邏輯尚未完整實現。`);
-                }
-
-                // 1. 建立療程套票文件
-                transaction.set(newPackageRef, {
-                    customerId: customerFirestoreId, // Firestore doc ID
-                    customerDisplayId: customerData.displayCustomerId || 'N/A',
-                    customerName: customerData.name || 'N/A',
-                    treatmentCategory: category,
-                    treatmentName: name,
-                    purchaseDate: serverTimestamp(),
-                    purchasedUnits: purchasedUnits,
-                    usedUnits: 1, // 首次預約即消耗一次
-                    status: purchasedUnits === 1 ? "completed" : "active",
-                    createdAt: serverTimestamp(),
-                    createdBy: editorName,
-                    updatedAt: serverTimestamp(),
-                    updatedBy: editorName,
-                    revokedInfo: null
-                });
-
-                // 2. 建立首次預約記錄
-                transaction.set(firstAppointmentRef, {
-                    appointmentDateTime: firebase.firestore.Timestamp.fromDate(firstUseDate),
-                    durationMinutes: durationMinutes,
-                    room: defaultRoom,
-                    status: "已預約",
-                    notes: "首次預約 (隨套票購買)",
-                    createdAt: serverTimestamp(),
-                    createdBy: editorName,
-                    statusModifiedAt: serverTimestamp(),
-                    statusModifiedBy: editorName
-                });
-            }); // Firestore 交易結束
-
-            console.log("[customers.js] 療程購買及首次預約成功！ Package ID:", newPackageRef.id);
-            displayGeneralMessage(addTreatmentMessage, "療程購買及首次預約已成功新增！", false);
-            
-            if(addTreatmentFormContainer) addTreatmentFormContainer.classList.add('hidden');
-            // ... 清除表單欄位 ...
-            
-            await loadCustomerDataIntoUI(customerFirestoreId); // 重新載入客戶所有相關資料
-            // 嘗試自動選中新購買的療程 (可選)
-            const newPackageRow = treatmentHistoryContent.querySelector(`.treatment-row[data-treatment-id="${newPackageRef.id}"]`);
-            if (newPackageRow) {
-                newPackageRow.click(); // 觸發點擊以顯示其預約
+        const purchaseDataForParent = {
+            customerId: customerFirestoreId,
+            customerDisplayId: customerData.displayCustomerId || 'N/A',
+            customerName: customerData.name || 'N/A',
+            treatmentCategory: category, treatmentName: name, purchasedUnits: purchasedUnits, 
+            amount: amount, // 新增：傳遞金額
+            editorName: editorName,
+            firstAppointment: {
+                firstUseDateTime: firstUseDateTimeStr, durationMinutes: durationMinutes, room: defaultRoom,
+                notes: "首次預約 (隨套票購買)", editorName: editorName
             }
+        };
+        
+        if (submitAddTreatmentButton) { submitAddTreatmentButton.disabled = true; submitAddTreatmentButton.textContent = "處理中..."; }
+        if (cancelAddTreatmentButton) cancelAddTreatmentButton.disabled = true;
 
-
-        } catch (error) {
-            console.error("[customers.js] 新增療程購買及預約失敗:", error);
-            displayGeneralMessage(addTreatmentMessage, `新增失敗: ${error.message}`, true);
-        }
+        window.parent.postMessage({ type: 'ADD_TREATMENT_PURCHASE', payload: purchaseDataForParent }, window.parent.location.origin);
+        displayGeneralMessage(addTreatmentMessage, "療程購買請求已傳送...", false);
     }
-    
+
+    // 更新：renderTreatmentHistory (按鈕邏輯, 已用罄樣式)
     function renderTreatmentHistory() {
-        // ... (此函數需修改為從 allCustomerTreatments 陣列渲染，並處理 Timestamp)
-        // ... (篩選邏輯與之前類似)
         if (!treatmentHistoryContent || !allCustomerTreatments) return;
         const customerFirestoreId = currentLoadedCustomerId;
         if (!customerFirestoreId) {
              treatmentHistoryContent.innerHTML = "<p class='text-base py-2'>請先查詢並載入客戶資料。</p>"; return;
         }
 
-        let treatmentsToRender = [...allCustomerTreatments]; // 使用已從 Firestore 載入的資料
+        let treatmentsToRender = [...allCustomerTreatments];
         const isFilterPresent = treatmentFilterPending && treatmentFilterCompleted && treatmentFilterRevoked;
-        
+
         if (isFilterPresent) {
             const showPending = treatmentFilterPending.checked;
             const showCompleted = treatmentFilterCompleted.checked;
             const showRevoked = treatmentFilterRevoked.checked;
-            
             treatmentsToRender = treatmentsToRender.filter(t => {
                 const remaining = (t.purchasedUnits || 0) - (t.usedUnits || 0);
                 const isRevoked = t.status === "revoked";
                 const isPending = !isRevoked && remaining > 0;
-                const isCompleted = !isRevoked && remaining <= 0; // 等於0或小於0都算完成
-
-                if (!showPending && !showCompleted && !showRevoked) return true; 
-                return (showPending && isPending) || 
-                       (showCompleted && isCompleted) || 
-                       (showRevoked && isRevoked);
+                const isCompleted = !isRevoked && remaining <= 0;
+                if (!showPending && !showCompleted && !showRevoked) return true;
+                return (showPending && isPending) || (showCompleted && isCompleted) || (showRevoked && isRevoked);
             });
         }
-        
+
         const previouslySelectedTreatmentRow = treatmentHistoryContent.querySelector('.treatment-row.selected');
         const previouslySelectedPackageId = previouslySelectedTreatmentRow ? previouslySelectedTreatmentRow.dataset.treatmentId : null;
+        console.log("[renderTreatmentHistory] DEBUG: Currently selected Package ID for button visibility:", previouslySelectedPackageId); // 偵錯日誌
+        const currentUserRole = getCurrentUserRole ? getCurrentUserRole() : null;
+        console.log("[renderTreatmentHistory] DEBUG: Current User Role:", currentUserRole); // 偵錯日誌
 
-        treatmentHistoryContent.innerHTML = ""; 
+        treatmentHistoryContent.innerHTML = "";
         if (treatmentsToRender.length === 0) {
             treatmentHistoryContent.innerHTML = "<p class='text-base py-2'>沒有符合條件的購買紀錄。</p>";
-            renderAppointmentHistory(null, true); // 清空或顯示所有客戶預約
+            renderAppointmentHistory(null, true);
             return;
         }
-        // (渲染 HTML 的邏輯與 MOCK_DB 版本相似，但使用 formatFirestoreTimestampForDisplay 處理 purchaseDate 和 revokedAt)
-        // 例如: formatFirestoreTimestampForDisplay(t.purchaseDate)
-        // ... (渲染及事件綁定)
-         let html = '';
-        treatmentsToRender.forEach((pkg) => { // pkg 代表一個 treatment package
+
+        let headerHtml = `
+            <div class="grid grid-cols-[2fr_1.5fr_1fr_1fr_2.5fr] md:grid-cols-5 gap-x-2 py-2 border-b border-gray-300 font-semibold text-sm sticky top-0 bg-white z-10">
+                <span>療程名稱</span>
+                <span class="text-center">購買日期</span>
+                <span class="text-center">次數記錄</span>
+                <span class="text-center">購買金額</span>
+                <span class="text-right pr-2"></span>
+            </div>
+            <div class="treatment-rows-container"></div>`; // 表格內容容器
+        treatmentHistoryContent.innerHTML = headerHtml;
+        const rowsContainer = treatmentHistoryContent.querySelector('.treatment-rows-container');
+
+        let rowsHtml = '';
+        treatmentsToRender.forEach((pkg) => {
             const remaining = (pkg.purchasedUnits || 0) - (pkg.usedUnits || 0);
-            const countsDisplay = `${pkg.purchasedUnits || 0} / ${pkg.usedUnits || 0} / ${remaining}`;
-            const isSelectedClass = (pkg.id === previouslySelectedPackageId) ? 'selected' : '';
-            let actionButtonsHtml = '';
-            let revokeButtonHtml = '';
+            const countsDisplay = `${pkg.purchasedUnits || 0} - ${pkg.usedUnits || 0} `;
+            const isSelected = (pkg.id === previouslySelectedPackageId);
+            const isSelectedClass = isSelected ? 'selected' : ''; // 用於高亮選中行
+            const purchaseAmountDisplay = pkg.amount !== null && pkg.amount !== undefined ? `$${pkg.amount.toLocaleString()}` : 'N/A';
+            let managementButtonsHtml = '';
 
             if (pkg.status === "revoked") {
-                const revokedInfo = pkg.revokedInfo ? `註銷者: ${pkg.revokedInfo.revokedBy}, 時間: ${formatFirestoreTimestampForDisplay(pkg.revokedInfo.revokedAt)}` : '註銷資訊未知';
-                actionButtonsHtml = `<span class="text-red-500 font-semibold text-xs whitespace-nowrap" title="${revokedInfo}">已註銷</span>`;
+                const revokedInfo = pkg.revokedInfo ? `註銷者: ${pkg.revokedInfo.revokedBy}, 時間: ${formatFirestoreTimestampForDisplay(pkg.revokedInfo.revokedAt)}${pkg.revokedInfo.reason ? `, 原因: ${pkg.revokedInfo.reason}` : ''}` : '註銷資訊未知';
+                managementButtonsHtml = `<button class="button-revoked" title="${revokedInfo}" disabled>已註銷</button>`;
             } else {
-                if (isSelectedClass) { 
-                    revokeButtonHtml = `<button class="action-button-secondary open-revoke-modal-btn text-xs whitespace-nowrap mr-1 border border-red-500 text-red-500 hover:bg-red-50" data-treatment-id="${pkg.id}" title="註銷此筆療程購買紀錄">&nbsp; 註銷 &nbsp;</button>`;
+                let adminButtonsHtml = '';
+                // **核心判斷：該列被選取 且 使用者是 admin**
+                if (isSelected && currentUserRole === 'admin') {
+                    console.log(`[renderTreatmentHistory] DEBUG: Admin buttons WILL be generated for selected pkg ${pkg.id}`); // 偵錯日誌
+                    const editBtnHtml = `<button class="action-button-secondary open-edit-units-btn text-xs whitespace-nowrap mr-1 border border-blue-500 text-blue-500 hover:bg-blue-50" data-treatment-id="${pkg.id}" data-current-units="${pkg.purchasedUnits}" title="編輯此筆療程購買數量">編輯</button>`;
+                    const revokeBtnHtml = `<button class="action-button-secondary open-revoke-modal-btn text-xs whitespace-nowrap mr-1 border border-red-500 text-red-500 hover:bg-red-50" data-treatment-id="${pkg.id}" title="註銷此筆療程購買紀錄">註銷</button>`;
+                    adminButtonsHtml = `${editBtnHtml}${revokeBtnHtml}`;
+                } else if (isSelected) { // 如果只是被選取但不是admin，也印個日誌
+                     console.log(`[renderTreatmentHistory] DEBUG: Row ${pkg.id} is selected, but user is NOT admin. No admin buttons.`); // 偵錯日誌
                 }
+
+                let addAppointmentButtonHtml = '';
                 if (remaining > 0) {
-                    actionButtonsHtml = `<button class="action-button add-inline-appointment-btn text-xs whitespace-nowrap" data-treatment-id="${pkg.id}" data-treatment-name="${pkg.treatmentName}" title="為此療程新增預約">新增預約</button>`;
+                    addAppointmentButtonHtml = `<button class="action-button add-inline-appointment-btn text-xs whitespace-nowrap" data-treatment-id="${pkg.id}" data-treatment-name="${pkg.treatmentName}" title="為此療程新增預約">新增預約</button>`;
                 } else {
-                    actionButtonsHtml = '<span class="text-gray-400 text-xs whitespace-nowrap">已用罄</span>'; 
+                    // **更新：「已用罄」改為灰色按鈕樣式**
+                    addAppointmentButtonHtml = '<button class="button-used-up" disabled>使用完畢</button>';
                 }
+                managementButtonsHtml = `${adminButtonsHtml}${addAppointmentButtonHtml}`;
             }
-            html += `
-                <div class="treatment-row grid grid-cols-[auto_1fr_1fr_auto] md:grid-cols-4 gap-x-3 items-center py-2.5 border-b border-gray-100 text-sm hover:bg-teal-50 ${isSelectedClass}" data-treatment-id="${pkg.id}" data-status="${pkg.status || 'active'}">
-                    <span class="truncate pr-1 col-span-1 min-w-[120px] md:min-w-0">${pkg.treatmentName} (${pkg.treatmentCategory})</span>
+
+            rowsHtml += `
+                <div class="treatment-row grid grid-cols-[2fr_1.5fr_1fr_1fr_2.5fr] md:grid-cols-5 gap-x-2 items-center py-2.5 border-b border-gray-100 text-sm hover:bg-teal-50 ${isSelectedClass}" data-treatment-id="${pkg.id}" data-status="${pkg.status || 'active'}">
+                    <span class="truncate pr-1 col-span-1">${pkg.treatmentName}</span>
                     <span class="text-center text-gray-600 col-span-1">${formatFirestoreTimestampForDisplay(pkg.purchaseDate)}</span>
-                    <span class="text-center text-gray-600 col-span-1">${countsDisplay}</span>
-                    <span class="text-right h-full flex items-center justify-end col-span-1 space-x-1">
-                        ${revokeButtonHtml}
-                        ${actionButtonsHtml}
+                    <span class="text-center text-gray-600 col-span-1 treatment-units-display" data-original-purchased="${pkg.purchasedUnits}" data-used="${pkg.usedUnits}">${countsDisplay}</span>
+                    <span class="text-center text-gray-600 col-span-1">${purchaseAmountDisplay}</span>
+                    <span class="text-right h-full flex items-center justify-end col-span-1 space-x-1 pr-1">
+                        ${managementButtonsHtml}
                     </span>
                 </div>`;
         });
-        treatmentHistoryContent.innerHTML = html;
-        // 重新綁定事件 (與您 MOCK_DB 版本相同)
+        if (rowsContainer) { // 確保 rowsContainer 存在
+            rowsContainer.innerHTML = rowsHtml;
+        } else {
+            console.error("Error: .treatment-rows-container not found for appending rows.");
+            // Fallback，但可能導致重複表頭 (應避免)
+            // treatmentHistoryContent.innerHTML += rowsHtml;
+        }
+        
         attachTreatmentRowEventListeners();
         attachAddInlineAppointmentEventListeners();
         attachOpenRevokeModalEventListeners();
+        attachOpenEditUnitsEventListeners(); // 新增
 
         if (!treatmentHistoryContent.querySelector('.treatment-row.selected')) {
             renderAppointmentHistory(null, true);
         }
     }
-    
-    // 將事件綁定提取為單獨函數，以便在重新渲染後調用
-    function attachTreatmentRowEventListeners() {
-        document.querySelectorAll('.treatment-row').forEach(row => {
-            row.addEventListener('click', function(event) {
-                if (event.target.closest('button')) return; // 如果點擊的是按鈕，則不處理行點擊
 
-                const previouslySelected = treatmentHistoryContent.querySelector('.treatment-row.selected');
-                const packageId = this.dataset.treatmentId;
-                
-                document.querySelectorAll('.inline-appointment-form:not(#inline-appointment-form-template)').forEach(form => form.remove());
+    // 新增：處理編輯購買數量的按鈕事件
+    function attachOpenEditUnitsEventListeners() {
+        document.querySelectorAll('.open-edit-units-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const packageId = e.target.dataset.treatmentId;
+                const currentUnits = e.target.dataset.currentUnits;
+                const row = e.target.closest('.treatment-row');
+                if (!row) return;
 
-                if (previouslySelected === this && !this.classList.contains('selected-by-button-action')) { 
-                    this.classList.remove('selected');
-                    renderAppointmentHistory(null, true); // 顯示客戶所有預約
-                } else {
-                    if (previouslySelected) previouslySelected.classList.remove('selected');
-                    this.classList.add('selected');
-                    renderAppointmentHistory(packageId, false); // 顯示此套票的預約
+                // 移除任何已存在的編輯表單
+                document.querySelectorAll('.inline-edit-treatment-units-active-form').forEach(form => {
+                    // 嘗試恢復原先的文字顯示
+                    const prevRowUnitsCellOriginalText = form.closest('.treatment-row')?.querySelector('.treatment-units-display .original-units-text') || form.closest('.treatment-row')?.querySelector('.treatment-units-display');
+                    if(prevRowUnitsCellOriginalText && prevRowUnitsCellOriginalText.style) prevRowUnitsCellOriginalText.style.display = 'block';
+                    form.remove();
+                });
+
+                const unitsDisplayCell = row.querySelector('.treatment-units-display');
+                // 創建一個 span 來保存並稍後恢復原始文字 (如果還沒有)
+                let originalTextSpan = unitsDisplayCell.querySelector('.original-units-text');
+                if (!originalTextSpan) {
+                    originalTextSpan = document.createElement('span');
+                    originalTextSpan.className = 'original-units-text';
+                    originalTextSpan.textContent = unitsDisplayCell.textContent; // 保存當前文字
+                    // 清空 cell 並加入 span (以便後續隱藏/顯示)
+                    // unitsDisplayCell.innerHTML = ''; // 這樣會移除 dataset，不好
+                    // unitsDisplayCell.appendChild(originalTextSpan);
                 }
-                this.classList.remove('selected-by-button-action');
-                renderTreatmentHistory(); // 重新渲染以更新註銷按鈕可見性
+                
+                if (unitsDisplayCell) { // 隱藏原始文字內容
+                    // unitsDisplayCell.style.visibility = 'hidden'; // 或用其他方式隱藏
+                    Array.from(unitsDisplayCell.childNodes).forEach(node => { // 隱藏原始直接子節點
+                         if(node.style) node.style.display = 'none';
+                         else if (node.nodeType === Node.TEXT_NODE) { // 包裝文字節點以便隱藏
+                             const wrapper = document.createElement('span');
+                             wrapper.className = 'original-units-text-wrapper'; // 臨時class
+                             wrapper.style.display = 'none';
+                             node.parentNode.insertBefore(wrapper, node);
+                             wrapper.appendChild(node);
+                         }
+                    });
+                }
+
+
+                const formCloneContainer = inlineEditTreatmentUnitsTemplate.cloneNode(true); // 從模板複製
+                const formClone = formCloneContainer.firstElementChild; // 獲取實際的表單 div
+                formClone.classList.add('inline-edit-treatment-units-active-form'); // 標記活動表單
+                const input = formClone.querySelector('input[type="number"]');
+                input.value = currentUnits;
+                const messageEl = formClone.querySelector('.inline-edit-units-message');
+
+                formClone.querySelector('.save-inline-edit-units').addEventListener('click', async () => {
+                    const newUnits = parseInt(input.value);
+                    const usedUnits = parseInt(unitsDisplayCell.dataset.used || "0"); // 從 cell 的 dataset 獲取已使用數量
+                    if (isNaN(newUnits) || newUnits < 0 || newUnits < usedUnits) {
+                        displayGeneralMessage(messageEl, `數量無效 (必須 >= ${usedUnits})。`, true); return;
+                    }
+                    displayGeneralMessage(messageEl, '傳送中...', false);
+                    // 發送給父視窗處理 Firestore 更新
+                     window.parent.postMessage({
+                        type: 'UPDATE_TREATMENT_UNITS',
+                        payload: {
+                            packageId: packageId, newPurchasedUnits: newUnits,
+                            editorName: getCurrentEditorName(), customerFirestoreId: currentLoadedCustomerId
+                        }
+                    }, window.parent.location.origin);
+                });
+                formClone.querySelector('.cancel-inline-edit-units').addEventListener('click', () => {
+                    if (unitsDisplayCell) { // 恢復原始文字顯示
+                         // unitsDisplayCell.style.visibility = 'visible';
+                         Array.from(unitsDisplayCell.childNodes).forEach(node => {
+                             if(node.style && node !== formClone) node.style.display = ''; // 顯示原始直接子節點
+                             else if (node.classList && node.classList.contains('original-units-text-wrapper')) {
+                                 node.style.display = ''; // 顯示包裝器
+                             }
+                         });
+                         // if(originalTextSpan) originalTextSpan.style.display = 'block';
+                    }
+                    formClone.remove();
+                });
+                if (unitsDisplayCell) { // 將編輯表單放入次數顯示的儲存格
+                    unitsDisplayCell.appendChild(formClone);
+                }
             });
         });
     }
 
-    function attachAddInlineAppointmentEventListeners() {
-        document.querySelectorAll('.add-inline-appointment-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => { 
-                e.stopPropagation(); 
-                const packageId = e.target.dataset.treatmentId; // treatment-id 實際上是 packageId
-                const treatmentName = e.target.dataset.treatmentName;
-                const targetRow = e.target.closest('.treatment-row');
-
+    function attachTreatmentRowEventListeners() { // 更新：確保點擊按鈕時不觸發列選取
+        document.querySelectorAll('.treatment-row').forEach(row => {
+            row.addEventListener('click', function(event) {
+                // 如果點擊的是按鈕或行內表單的任何部分，則不觸發列選擇/取消選擇邏輯
+                if (event.target.closest('button') || event.target.closest('.inline-edit-treatment-units') || event.target.closest('.inline-appointment-form')) {
+                    return; 
+                }
                 const previouslySelected = treatmentHistoryContent.querySelector('.treatment-row.selected');
-                if (previouslySelected && previouslySelected !== targetRow) {
+                const packageId = this.dataset.treatmentId;
+
+                // 移除任何已存在的行內表單 (預約或編輯數量)
+                document.querySelectorAll('.inline-appointment-form:not(#inline-appointment-form-template)').forEach(form => form.remove());
+                document.querySelectorAll('.inline-edit-treatment-units-active-form').forEach(form => {
+                     // 恢復原先的文字顯示
+                     const unitsDisplayCellOriginalText = form.closest('.treatment-row')?.querySelector('.treatment-units-display .original-units-text') || form.closest('.treatment-row')?.querySelector('.treatment-units-display');
+                     if(unitsDisplayCellOriginalText && unitsDisplayCellOriginalText.style) unitsDisplayCellOriginalText.style.display = 'block'; // Restore display
+                     form.remove();
+                });
+
+                if (previouslySelected === this && !this.classList.contains('selected-by-button-action')) {
+                    // 如果再次點擊已選中的列 (且不是因為點擊新增預約按鈕導致的選中) -> 取消選取
+                    this.classList.remove('selected');
+                    renderAppointmentHistory(null, true); // 顯示客戶所有預約
+                } else {
+                    // 選取新的列或切換選取
+                    if (previouslySelected) {
+                        previouslySelected.classList.remove('selected');
+                    }
+                    this.classList.add('selected');
+                    renderAppointmentHistory(packageId, false); // 顯示此療程的預約
+                }
+                // 清除因按鈕點擊導致的特殊選中標記 (如果有的話)
+                document.querySelectorAll('.treatment-row.selected-by-button-action').forEach(r => r.classList.remove('selected-by-button-action'));
+                
+                renderTreatmentHistory(); // **重新渲染療程列表以更新按鈕可見性**
+            });
+        });
+    }
+
+    function attachAddInlineAppointmentEventListeners() { // 更新：選取相關列並處理表單插入
+        document.querySelectorAll('.add-inline-appointment-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation(); // 阻止事件冒泡到列的點擊事件
+                const packageId = e.target.dataset.treatmentId;
+                const treatmentName = e.target.dataset.treatmentName;
+                const clickedRow = e.target.closest('.treatment-row');
+
+                // 取消其他列的選中狀態，選中當前操作的列
+                const previouslySelected = treatmentHistoryContent.querySelector('.treatment-row.selected');
+                if (previouslySelected && previouslySelected !== clickedRow) {
                     previouslySelected.classList.remove('selected');
                 }
-                if(targetRow) {
-                    targetRow.classList.add('selected', 'selected-by-button-action');
-                    renderAppointmentHistory(packageId, false); 
-                    renderTreatmentHistory(); 
-                }
-
+                // 移除任何已存在的行內表單 (預約或編輯數量)
                 document.querySelectorAll('.inline-appointment-form:not(#inline-appointment-form-template)').forEach(form => form.remove());
-                
+                document.querySelectorAll('.inline-edit-treatment-units-active-form').forEach(form => {
+                    const unitsDisplayCellOriginalText = form.closest('.treatment-row')?.querySelector('.treatment-units-display .original-units-text') || form.closest('.treatment-row')?.querySelector('.treatment-units-display');
+                     if(unitsDisplayCellOriginalText && unitsDisplayCellOriginalText.style) unitsDisplayCellOriginalText.style.display = 'block';
+                    form.remove();
+                });
+
                 if (inlineAppointmentFormTemplate) {
                     const formClone = inlineAppointmentFormTemplate.cloneNode(true);
-                    formClone.id = `inline-form-${packageId}`;
+                    formClone.id = `inline-form-${packageId}`; // 確保 ID 唯一
                     formClone.classList.remove('hidden');
                     if(formClone.querySelector('.inline-treatment-name')) formClone.querySelector('.inline-treatment-name').textContent = treatmentName;
-                    if(formClone.querySelector('.inline-treatment-id-holder')) formClone.querySelector('.inline-treatment-id-holder').value = packageId; // 儲存 packageId
-                    
+                    if(formClone.querySelector('.inline-treatment-id-holder')) formClone.querySelector('.inline-treatment-id-holder').value = packageId;
                     const dateTimeInputForInline = formClone.querySelector('.inline-appointment-datetime');
                     setDateTimeInputDefault(dateTimeInputForInline);
-                    
-                    if(targetRow) targetRow.parentNode.insertBefore(formClone, targetRow.nextSibling); 
-                    else if (treatmentHistoryContent) treatmentHistoryContent.appendChild(formClone);
+
+                    if (clickedRow) { // 將當前點擊的列標記為選中 (如果是因按鈕觸發)
+                        if(!clickedRow.classList.contains('selected')) clickedRow.classList.add('selected');
+                        clickedRow.classList.add('selected-by-button-action'); // 特殊標記
+                        renderAppointmentHistory(packageId, false); // 顯示此療程的預約
+                    } else {
+                        renderAppointmentHistory(null, true); // 如果找不到列，顯示所有預約
+                    }
+                    renderTreatmentHistory(); // 重新渲染療程列表以更新選中狀態和按鈕
+
+                    // 找到重新渲染後的目標列來插入表單
+                    const targetRowForForm = treatmentHistoryContent.querySelector(`.treatment-row[data-treatment-id="${packageId}"]`);
+                    if (targetRowForForm && targetRowForForm.parentNode) {
+                        // 插入表單到該列之後
+                        targetRowForForm.parentNode.insertBefore(formClone, targetRowForForm.nextSibling);
+                    } else if (treatmentHistoryContent) { // Fallback，附加到列表末尾
+                        treatmentHistoryContent.appendChild(formClone);
+                        console.warn(`[customers.js] 行內預約表單：渲染後找不到 packageId ${packageId} 對應的療程行。`);
+                    } else {
+                        console.error("[customers.js] 行內預約表單：無法插入。treatmentHistoryContent 未找到。");
+                    }
 
                     formClone.querySelector('.submit-inline-appointment').addEventListener('click', () => submitInlineAppointment(formClone, packageId, treatmentName));
                     formClone.querySelector('.cancel-inline-appointment').addEventListener('click', () => {
                         formClone.remove();
-                        if(targetRow) targetRow.classList.remove('selected-by-button-action');
+                        if(clickedRow) clickedRow.classList.remove('selected-by-button-action'); // 清除特殊標記
+                        // 可選：如果只是因為按鈕而選中，則取消選中，這需要更複雜的狀態管理
+                        renderTreatmentHistory(); // 重新渲染以更新按鈕和選中狀態
                     });
                 }
             });
         });
     }
     
-    async function submitInlineAppointment(formClone, packageId, treatmentNameForDisplay) {
+    async function submitInlineAppointment(formClone, packageId, treatmentNameForDisplay) { // 更新：傳遞 customerName
         const customerFirestoreId = currentLoadedCustomerId;
         const editorName = getCurrentEditorName();
-        const datetimeInput = formClone.querySelector('.inline-appointment-datetime');
-        const messageEl = formClone.querySelector('.inline-appointment-message');
+        const datetimeInput = formClone.querySelector(".inline-appointment-datetime");
+        const messageEl = formClone.querySelector(".inline-appointment-message");
 
-        if (!datetimeInput || !datetimeInput.value) {
-             displayGeneralMessage(messageEl, "請選擇預約時間。", true); return;
-        }
-        displayGeneralMessage(messageEl, "預約中...", false);
-        const appointmentDateTime = new Date(datetimeInput.value);
+        if (!datetimeInput || !datetimeInput.value) { displayGeneralMessage(messageEl, "請選擇預約時間。", true); return; }
+        const appointmentDateTimeStr = datetimeInput.value;
+        const treatmentDetails = treatmentDataStructure.find(t => t.name === treatmentNameForDisplay); // 假設 treatmentNameForDisplay 足夠唯一
+        const durationMinutes = Number(treatmentDetails?.durationMinutes || 30);
+        let room = treatmentDetails?.room || "診療室";
+        const customerName = currentEditingCustomerData ? currentEditingCustomerData.name : "N/A"; // 新增：獲取客戶姓名
 
-        const packageRef = db.collection("customerTreatmentPackages").doc(packageId);
-        const newAppointmentRef = packageRef.collection("appointments").doc(); // Firestore 自動產生 ID
+        const appointmentDataForParent = {
+            packageId: packageId,
+            appointmentDateTime: appointmentDateTimeStr,
+            durationMinutes: durationMinutes,
+            room: room,
+            notes: "行內表單新增預約",
+            editorName: editorName,
+            customerFirestoreId: customerFirestoreId,
+            treatmentName: treatmentNameForDisplay, // 新增
+            customerName: customerName             // 新增
+        };
+        const submitBtn = formClone.querySelector('.submit-inline-appointment');
+        const cancelBtn = formClone.querySelector('.cancel-inline-appointment');
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "傳送中..."; }
+        if (cancelBtn) cancelBtn.disabled = true;
 
-        const treatmentDetails = treatmentDataStructure.find(t => t.name === treatmentNameForDisplay /* && t.category === ??? (需要 category 嗎?) */);
-        const durationMinutes = treatmentDetails ? treatmentDetails.durationMinutes || 30 : 30;
-        let room = treatmentDetails ? treatmentDetails.room || "診療室" : "診療室";
-
-        try {
-            await db.runTransaction(async (transaction) => {
-                const packageDoc = await transaction.get(packageRef);
-                if (!packageDoc.exists) throw new Error("療程套票不存在。");
-                
-                const packageData = packageDoc.data();
-                if (packageData.usedUnits >= packageData.purchasedUnits) throw new Error("此療程套票已無剩餘次數。");
-                if (packageData.status === 'revoked') throw new Error("此療程套票已被註銷，無法新增預約。");
-
-                // --- 複雜的點滴室/房間衝突檢查邏輯 (極度簡化) ---
-                if (room === "點滴室") {
-                    console.warn("[customers.js] 點滴室動態分配及衝突檢查邏輯尚未完整實現於行內預約，預設使用 '點滴室1'");
-                    room = "點滴室1";
-                } else {
-                    console.warn(`[customers.js] ${room} 的衝突檢查邏輯尚未完整實現於行內預約。`);
-                }
-                // --- 檢查邏輯結束 ---
-
-                transaction.set(newAppointmentRef, {
-                    appointmentDateTime: firebase.firestore.Timestamp.fromDate(appointmentDateTime),
-                    durationMinutes: durationMinutes,
-                    room: room,
-                    status: "已預約",
-                    notes: "行內表單新增預約",
-                    createdAt: serverTimestamp(),
-                    createdBy: editorName,
-                    statusModifiedAt: serverTimestamp(),
-                    statusModifiedBy: editorName
-                });
-
-                transaction.update(packageRef, {
-                    usedUnits: increment(1), // 原子性增加
-                    updatedAt: serverTimestamp(),
-                    updatedBy: editorName
-                    // 可選：如果 usedUnits + 1 === purchasedUnits，則更新 status 為 'completed'
-                });
-            });
-
-            displayGeneralMessage(messageEl, "預約成功！", false);
-            formClone.remove();
-            await loadCustomerDataIntoUI(customerFirestoreId); // 重新載入以更新列表和計數
-            
-            // 保持選中狀態
-            const currentSelectedTreatmentRow = treatmentHistoryContent.querySelector(`.treatment-row[data-treatment-id="${packageId}"]`);
-            if(currentSelectedTreatmentRow) {
-                 currentSelectedTreatmentRow.classList.add('selected');
-                 currentSelectedTreatmentRow.classList.remove('selected-by-button-action'); // 清除按鈕操作標記
-            }
-
-
-        } catch (error) {
-            console.error("[customers.js] 行內新增預約失敗:", error);
-            displayGeneralMessage(messageEl, `預約失敗: ${error.message}`, true);
-        }
+        window.parent.postMessage({ type: 'ADD_INLINE_APPOINTMENT', payload: appointmentDataForParent }, window.parent.location.origin);
+        displayGeneralMessage(messageEl, "預約請求已傳送...", false);
     }
 
-    function attachOpenRevokeModalEventListeners() {
+
+    function attachOpenRevokeModalEventListeners() { // 更新：加入 revokeReasonInput
          document.querySelectorAll('.open-revoke-modal-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                currentTreatmentPackageToRevokeId = e.target.dataset.treatmentId; // 這是 packageId
-                if (revokeConfirmInput) revokeConfirmInput.value = ''; 
-                displayGeneralMessage(revokeModalMessage, '', false); 
+                currentTreatmentPackageToRevokeId = e.target.dataset.treatmentId;
+                if (revokeConfirmInput) revokeConfirmInput.value = '';
+                if (revokeReasonInput) revokeReasonInput.value = ''; // 清空原因
+                displayGeneralMessage(revokeModalMessage, '', false);
                 if (revokeTreatmentModal) revokeTreatmentModal.classList.remove('hidden');
             });
         });
     }
     
-    async function handleRevokeTreatment() {
-        // ... (此函數需修改為使用 currentTreatmentPackageToRevokeId，並在交易中更新套票和其下預約)
+    async function handleRevokeTreatment() { // 更新：加入 revocationReason
         if (!currentTreatmentPackageToRevokeId) return;
         if (!revokeConfirmInput || revokeConfirmInput.value !== "註銷") {
-            displayGeneralMessage(revokeModalMessage, "輸入內容不符，紀錄未註銷。", true);
-            return;
+            displayGeneralMessage(revokeModalMessage, "輸入內容不符，紀錄未註銷。", true); return;
         }
-        displayGeneralMessage(revokeModalMessage, "註銷處理中...", false); 
         const editorName = getCurrentEditorName();
         const customerFirestoreId = currentLoadedCustomerId;
+        const reason = revokeReasonInput ? revokeReasonInput.value.trim() : ""; // 獲取原因
 
-        const packageRef = db.collection("customerTreatmentPackages").doc(currentTreatmentPackageToRevokeId);
-        const appointmentsInPackageRef = packageRef.collection("appointments");
+        const revokeDataForParent = {
+            packageIdToRevoke: currentTreatmentPackageToRevokeId,
+            editorName: editorName,
+            customerFirestoreId: customerFirestoreId,
+            revocationReason: reason // 新增：傳遞原因
+        };
+        if (confirmRevokeBtn) { confirmRevokeBtn.disabled = true; confirmRevokeBtn.textContent = "註銷中..."; }
+        if (cancelRevokeBtn) cancelRevokeBtn.disabled = true;
 
-        try {
-            await db.runTransaction(async (transaction) => {
-                // 1. 更新套票狀態
-                transaction.update(packageRef, {
-                    status: "revoked",
-                    // usedUnits: 0, // 根據您的需求，是否要重置已使用次數
-                    revokedInfo: {
-                        revokedBy: editorName,
-                        revokedAt: serverTimestamp()
-                    },
-                    updatedAt: serverTimestamp(),
-                    updatedBy: editorName
-                });
-
-                // 2. 查詢此套票下所有「已預約」的預約
-                const bookedAppointmentsQuery = appointmentsInPackageRef.where("status", "==", "已預約");
-                // 重要：交易中的讀取必須在寫入之前，或者使用 transaction.get()
-                const bookedAppointmentsSnapshot = await transaction.get(bookedAppointmentsQuery); 
-
-                bookedAppointmentsSnapshot.forEach(docSnapshot => {
-                    transaction.update(docSnapshot.ref, {
-                        status: "已取消", 
-                        statusModifiedAt: serverTimestamp(),
-                        statusModifiedBy: editorName,
-                        notes: (docSnapshot.data().notes || "") + " (因療程套票註銷而自動取消)"
-                    });
-                });
-            });
-            
-            displayGeneralMessage(revokeModalMessage, "療程已成功註銷。", false);
-            if (revokeTreatmentModal) revokeTreatmentModal.classList.add('hidden');
-            currentTreatmentPackageToRevokeId = null;
-            await loadCustomerDataIntoUI(customerFirestoreId); // 重新載入資料
-
-        } catch (error) {
-            console.error("[customers.js] 註銷療程失敗:", error);
-            displayGeneralMessage(revokeModalMessage, `註銷失敗: ${error.message}`, true);
-        }
+        window.parent.postMessage({ type: 'REVOKE_TREATMENT_PACKAGE', payload: revokeDataForParent }, window.parent.location.origin);
+        displayGeneralMessage(revokeModalMessage, "註銷請求已傳送...", false);
     }
     
+    // 更新：renderAppointmentHistory (新欄位"次數", 狀態按鈕改為新版)
     function renderAppointmentHistory(selectedPackageId = null, showAllForCustomer = false) {
-        // ... (此函數需修改為從 allCustomerAppointments 陣列渲染，並處理 Timestamp)
-        // ... (篩選邏輯與之前類似)
          if (!appointmentHistoryContent || !allCustomerAppointments) return;
         let appointmentsToDisplay = [];
 
@@ -1189,7 +1256,6 @@ async function generateNewDisplayCustomerId() {
         } else if (showAllForCustomer) {
             appointmentsToDisplay = [...allCustomerAppointments];
         }
-        // else (no package selected, not showing all for customer) -> show nothing or specific message
 
         const isApptFilterPresent = appointmentFilterBooked && appointmentFilterCompleted && appointmentFilterCancelled;
         if (isApptFilterPresent) {
@@ -1197,326 +1263,552 @@ async function generateNewDisplayCustomerId() {
             if (appointmentFilterBooked.checked) selectedStatuses.push("已預約");
             if (appointmentFilterCompleted.checked) selectedStatuses.push("已完成");
             if (appointmentFilterCancelled.checked) selectedStatuses.push("已取消");
-            // 如果沒有勾選任何篩選器，則顯示所有 (符合 packageId 或 showAllForCustomer 條件的)
             if (selectedStatuses.length > 0) {
                  appointmentsToDisplay = appointmentsToDisplay.filter(appt => selectedStatuses.includes(appt.status));
-            } else if (!(appointmentFilterBooked.checked || appointmentFilterCompleted.checked || appointmentFilterCancelled.checked)) {
-                // 如果所有篩選器都未勾選，可以選擇顯示全部或不顯示任何內容
-                // 目前行為：如果一個都沒勾，則 selectedStatuses 為空，不會進一步過濾，等同於顯示全部 (符合 packageId / showAll)
             }
         }
-        
-        // 按預約時間排序 (新到舊)
+        // 按預約日期時間降序排列
         appointmentsToDisplay.sort((a,b) => (b.appointmentDateTime.seconds || 0) - (a.appointmentDateTime.seconds || 0));
 
-        appointmentHistoryContent.innerHTML = ""; // 清空
+        appointmentHistoryContent.innerHTML = ""; // 清空舊內容
+        // 表頭 (6欄)
+        let headerHtml = `
+            <div class="grid grid-cols-[2fr_1fr_1fr_1.5fr_1fr_1.5fr] md:grid-cols-6 gap-x-2 py-2 border-b border-gray-300 font-semibold text-sm sticky top-0 bg-white z-10">
+                <span>療程名稱</span>
+                <span class="text-center">預約時間</span>                
+                <span class="text-center">次數</span>
+                <span class="text-center">ROOM</span>
+                <span class="text-center">狀態</span>
+                <span class="text-right pr-2"></span>
+            </div>
+            <div class="appointment-rows-container"></div>`; // 內容容器
+        appointmentHistoryContent.innerHTML = headerHtml;
+        const rowsContainer = appointmentHistoryContent.querySelector('.appointment-rows-container');
+
         if (appointmentsToDisplay.length === 0) {
-            if (showAllForCustomer || !selectedPackageId) { // 沒有選定特定套票，或就是要顯示全部
-                 appointmentHistoryContent.innerHTML = "<p class='text-base py-2'>此客戶尚無符合條件的預約紀錄。</p>";
-            } else { // 有選定特定套票，但該套票下無符合條件預約
-                 appointmentHistoryContent.innerHTML = "<p class='text-base py-2'>此療程尚無符合條件的預約紀錄。</p>";
-            }
+            const msg = (showAllForCustomer || !selectedPackageId) ? "此客戶尚無符合條件的預約紀錄。" : "此療程尚無符合條件的預約紀錄。"
+            if(rowsContainer) rowsContainer.innerHTML = `<p class='text-base py-2'>${msg}</p>`;
             return;
         }
-        // (渲染 HTML 的邏輯與 MOCK_DB 版本相似，但使用 formatFirestoreTimestampForDisplay 處理 appointmentDateTime 和 statusModifiedAt)
-        // 例如: formatFirestoreTimestampForDisplay(a.appointmentDateTime)
-        // ... (渲染及事件綁定)
-         let html = '';
+
+         let rowsHtml = '';
          appointmentsToDisplay.forEach(a => {
             const statusClassInfo = { "已預約": "text-green-600", "已完成": "text-blue-600", "已取消": "text-red-500", "未到": "text-orange-500" };
             const statusClass = statusClassInfo[a.status] || 'text-gray-600';
             const statusHoverTitle = a.statusModifiedBy && a.statusModifiedAt ? `修改者: ${a.statusModifiedBy}, 時間: ${formatFirestoreTimestampForDisplay(a.statusModifiedAt)}` : `狀態: ${a.status}`;
-            
-            html += `
-                <div class="appointment-row grid grid-cols-[auto_1fr_1fr_auto] md:grid-cols-4 gap-x-3 items-center py-2.5 border-b border-gray-100 text-sm hover:bg-teal-50" data-appointment-id="${a.id}" data-package-id="${a.packageId}">
-                    <span class="truncate pr-1 col-span-1 min-w-[120px] md:min-w-0">${a.treatmentName} (${a.room || '未指定'})</span>
-                    <span class="text-center text-gray-600 col-span-1">${formatFirestoreTimestampForDisplay(a.appointmentDateTime)}</span>
+            // 次數顯示：如果是已取消，顯示 '-'，否則顯示 X / Y 或 N/A
+            const countDisplay = a.status === '已取消' ? '-' : (a.sequence !== null && a.packagePurchasedUnits ? `${a.packagePurchasedUnits} - ${a.sequence}` : 'N/A');
+
+
+            rowsHtml += `
+                <div class="appointment-row grid grid-cols-[2fr_1fr_1fr_1.5fr_1fr_1.5fr] md:grid-cols-6 gap-x-2 items-center py-2.5 border-b border-gray-100 text-sm hover:bg-teal-50" data-appointment-id="${a.id}" data-package-id="${a.packageId}">
+                    <span class="truncate pr-1 col-span-1">${a.treatmentName || 'N/A'}</span>
+                    <span class="text-center text-gray-600 col-span-1">${formatFirestoreTimestampForDisplay(a.appointmentDateTime)}</span>                    
+                    <span class="text-center text-gray-600 col-span-1">${countDisplay}</span>
+                    <span class="text-center text-gray-600 col-span-1">${a.room || '未指定'}</span>
                     <span class="${statusClass} text-center font-medium col-span-1" title="${statusHoverTitle}">${a.status}</span>
-                    <span class="text-right h-full flex items-center justify-end col-span-1">
-                        <button class="action-button open-status-menu-btn text-xs whitespace-nowrap" 
-                                data-appointment-id="${a.id}" 
-                                data-current-status="${a.status}" 
-                                data-package-id="${a.packageId}" 
+                    <span class="text-right h-full flex items-center justify-end col-span-1 pr-1">
+                        <button class="action-button open-status-change-menu-btn text-xs whitespace-nowrap"
+                                data-appointment-id="${a.id}"
+                                data-current-status="${a.status}"
+                                data-package-id="${a.packageId}"
                                 title="變更此預約狀態">變更狀態</button>
                     </span>
                 </div>`;
          });
-         appointmentHistoryContent.innerHTML = html;
-         attachOpenStatusMenuEventListeners(); // 重新綁定狀態選單按鈕事件
+         if (rowsContainer) { // 確保 rowsContainer 存在
+             rowsContainer.innerHTML = rowsHtml;
+         }
+         attachOpenStatusChangeMenuEventListeners(); // 綁定新版狀態變更選單事件
     }
     
-    function attachOpenStatusMenuEventListeners() {
-        document.querySelectorAll('.open-status-menu-btn').forEach(btn => {
+    // 新增：處理預約狀態變更的滑出選單
+    function attachOpenStatusChangeMenuEventListeners() {
+        document.querySelectorAll('.open-status-change-menu-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                e.stopPropagation();
+                e.stopPropagation(); // 阻止事件冒泡
                 const appointmentId = e.target.dataset.appointmentId;
                 const currentStatus = e.target.dataset.currentStatus;
-                const packageId = e.target.dataset.packageId; // 從按鈕獲取 packageId
+                const packageId = e.target.dataset.packageId;
                 
-                if(statusMenuAppointmentIdInput) statusMenuAppointmentIdInput.value = appointmentId;
-                if(statusMenuTreatmentIdInput) statusMenuTreatmentIdInput.value = packageId; // 儲存 packageId
-                
-                if(statusUpdateMenu) {
-                    // ... (顯示狀態選單的邏輯與您 MOCK_DB 版本相同) ...
-                    const radioToCheck = statusUpdateMenu.querySelector(`input[name="appointment_status_option"][value="${currentStatus}"]`);
-                    if (radioToCheck) radioToCheck.checked = true;
-                    else { statusUpdateMenu.querySelectorAll('input[name="appointment_status_option"]').forEach(r => r.checked = false); }
-                    
-                    const buttonRect = e.target.getBoundingClientRect();
-                    const menuHeight = statusUpdateMenu.offsetHeight || 150; 
-                    const spaceBelow = window.innerHeight - buttonRect.bottom;
-                    const spaceAbove = buttonRect.top;
+                // 移除任何已存在的選單
+                const existingMenu = document.getElementById('dynamic-status-menu');
+                if (existingMenu) existingMenu.remove();
 
-                    if (spaceBelow < menuHeight && spaceAbove > menuHeight + buttonRect.height) { 
-                        statusUpdateMenu.style.top = `${buttonRect.top + window.scrollY - menuHeight - 5}px`;
-                    } else { 
-                        statusUpdateMenu.style.top = `${buttonRect.bottom + window.scrollY + 5}px`;
-                    }
-                    statusUpdateMenu.style.left = `${buttonRect.right + window.scrollX - statusUpdateMenu.offsetWidth}px`; 
-                    statusUpdateMenu.classList.remove('hidden');
+                // 如果點擊的是已經激活選單的按鈕，則關閉選單並返回
+                if (btn.classList.contains('status-menu-active')) {
+                    btn.classList.remove('status-menu-active');
+                    return;
                 }
+                // 移除其他按鈕的激活狀態
+                document.querySelectorAll('.open-status-change-menu-btn.status-menu-active').forEach(activeBtn => {
+                    activeBtn.classList.remove('status-menu-active');
+                });
+                btn.classList.add('status-menu-active'); // 標記當前按鈕為激活
+
+
+                const menu = document.createElement('div');
+                menu.id = 'dynamic-status-menu';
+                menu.className = 'status-change-menu'; // 使用 style.css 中定義的樣式
+
+                const availableStatuses = ["已預約", "已完成", "已取消"]; // 您可以加入 "未到" 等其他狀態
+                availableStatuses.forEach(status => {
+                    if (status !== currentStatus) { // 不包含當前狀態
+                        const optionButton = document.createElement('button');
+                        optionButton.textContent = status;
+                        optionButton.dataset.newStatus = status;
+                        optionButton.addEventListener('click', () => {
+                            handleUpdateAppointmentStatus(appointmentId, packageId, status); // 直接更新狀態
+                            menu.remove(); // 移除選單
+                            btn.classList.remove('status-menu-active'); // 取消按鈕激活狀態
+                        });
+                        menu.appendChild(optionButton);
+                    }
+                });
+
+                document.body.appendChild(menu); // 附加到 body 以避免父元素樣式影響及 z-index 問題
+
+                // 定位選單到按鈕左側
+                const buttonRect = btn.getBoundingClientRect();
+                const menuWidth = menu.offsetWidth || 100; // 如果選單尚未渲染完成，預估寬度
+
+                menu.style.position = 'absolute';
+                menu.style.top = `${buttonRect.top + window.scrollY}px`;
+                menu.style.left = `${buttonRect.left + window.scrollX - menuWidth - 5}px`; // 減去選單寬度和一些間距
+                menu.style.display = 'flex'; // 確保可見
             });
          });
     }
 
-    async function handleUpdateAppointmentStatus() {
-        // ... (此函數需修改為使用 packageId 和 appointmentId 更新 Firestore，並可能在交易中調整 usedUnits)
-        if (!statusMenuAppointmentIdInput || !statusUpdateMenu || !statusMenuTreatmentIdInput) return;
-        const appointmentId = statusMenuAppointmentIdInput.value;
-        const packageId = statusMenuTreatmentIdInput.value; // 獲取 packageId
+    // 更新：處理預約狀態變更 (直接由選單按鈕觸發)
+    async function handleUpdateAppointmentStatus(appointmentId, packageId, newStatus) {
         const customerFirestoreId = currentLoadedCustomerId;
         const editorName = getCurrentEditorName();
 
-        const selectedStatusRadio = statusUpdateMenu.querySelector('input[name="appointment_status_option"]:checked');
-        if (!selectedStatusRadio) {
-            console.warn("[customers.js] 請選擇一個狀態。"); return;
-        }
-        const newStatus = selectedStatusRadio.value;
-        statusUpdateMenu.classList.add('hidden'); 
+        console.log(`[customers.js] Updating status for appt: ${appointmentId}, pkg: ${packageId} to ${newStatus}`);
 
-        const appointmentRef = db.collection("customerTreatmentPackages").doc(packageId)
-                                 .collection("appointments").doc(appointmentId);
-        const packageRef = db.collection("customerTreatmentPackages").doc(packageId);
+        const statusUpdateDataForParent = {
+            appointmentId: appointmentId,
+            packageId: packageId,
+            newStatus: newStatus,
+            editorName: editorName,
+            customerFirestoreId: customerFirestoreId
+        };
 
-        try {
-            await db.runTransaction(async (transaction) => {
-                const apptDoc = await transaction.get(appointmentRef);
-                if (!apptDoc.exists) throw new Error("預約記錄不存在。");
-                const oldStatus = apptDoc.data().status;
+        // 不再需要從 statusUpdateMenu 讀取狀態，因為 newStatus 已傳入
+        // statusUpdateMenuOld.classList.add('hidden'); // 舊選單應始終隱藏
 
-                transaction.update(appointmentRef, {
-                    status: newStatus,
-                    statusModifiedAt: serverTimestamp(),
-                    statusModifiedBy: editorName
-                });
-
-                // 處理 usedUnits 的變化
-                let usedUnitsChange = 0;
-                if ((oldStatus === "已預約" || oldStatus === "未到") && newStatus === "已完成") {
-                    usedUnitsChange = 0; // 假設預約時已扣點，完成時不再動點數。若預約不扣點，完成才扣，則為 +1
-                } else if (oldStatus === "已完成" && (newStatus === "已取消" || newStatus === "未到")) {
-                    usedUnitsChange = -1; // 從完成改為取消/未到，點數應歸還
-                } else if (oldStatus === "已預約" && (newStatus === "已取消" || newStatus === "未到")) {
-                    usedUnitsChange = -1; // 從已預約改為取消/未到，點數應歸還 (假設預約時就扣點)
-                } else if ((oldStatus === "已取消" || oldStatus === "未到") && newStatus === "已預約") {
-                     usedUnitsChange = 1; // 從取消/未到改回預約，重新扣點
-                }
-                 // 如果是從 取消/未到 改為 完成，則 usedUnitsChange 也是 +1 (假設預約不扣點，完成才扣)
-                 // 這裡的 usedUnitsChange 邏輯需要根據您的業務規則嚴謹定義
-
-                if (usedUnitsChange !== 0) {
-                    const packageDoc = await transaction.get(packageRef);
-                    if (packageDoc.exists) {
-                        const currentUsedUnits = packageDoc.data().usedUnits || 0;
-                        if (usedUnitsChange === -1 && currentUsedUnits <=0 ) {
-                            //避免 usedUnits 變負數
-                            console.warn("[customers.js] Attempted to decrement usedUnits below zero.");
-                        } else {
-                             transaction.update(packageRef, {
-                                usedUnits: increment(usedUnitsChange),
-                                updatedAt: serverTimestamp(),
-                                updatedBy: editorName
-                                // 可選：根據新的 usedUnits 更新 package status (active/completed)
-                            });
-                        }
-                    }
-                }
-            });
-            console.log("[customers.js] 預約狀態更新成功！");
-            await loadCustomerDataIntoUI(customerFirestoreId); // 重新載入資料
-        } catch (error) {
-            console.error("[customers.js] 更新預約狀態失敗:", error);
-            alert(`更新預約狀態失敗: ${error.message}`);
-        }
+        window.parent.postMessage({
+            type: 'UPDATE_APPOINTMENT_STATUS',
+            payload: statusUpdateDataForParent
+        }, window.parent.location.origin);
+        // 此處不再禁用按鈕，因為選單會立即消失
     }
 
     function renderAssessmentHistory() {
-        // ... (此函數需修改為從 allCustomerAssessments 陣列渲染，並處理 Timestamp)
-        if (!assessmentHistoryContent || !allCustomerAssessments) return;
-        const customerFirestoreId = currentLoadedCustomerId;
-         if (!customerFirestoreId) {
+        if (!assessmentHistoryContent) return; // 確保元素存在
+        if (!currentLoadedCustomerId) { // 確保有客戶ID
              assessmentHistoryContent.innerHTML = "<p class='text-base py-2'>請先查詢並載入客戶資料。</p>"; return;
         }
-        // 假設 allCustomerAssessments 已經在 loadCustomerDataIntoUI 中被正確填充
-        // const assessmentsToRender = allCustomerAssessments.filter(asm => asm.customerId === customerFirestoreId); // 不再需要，因為 allCustomerAssessments 就是該客戶的
-
-        if (allCustomerAssessments.length === 0) {
+        if (!assessmentsLoaded && allCustomerAssessments.length === 0) { // 如果尚未加載且沒有資料，顯示提示
+            assessmentHistoryContent.innerHTML = "<p class='text-base py-2'>問卷紀錄待載入 (請點擊上方「問卷紀錄」按鈕)</p>";
+            return;
+        }
+        if (assessmentsLoaded && allCustomerAssessments.length === 0) { // 如果已加載但沒有紀錄
             assessmentHistoryContent.innerHTML = "<p class='text-base py-2'>此客戶尚無問卷紀錄。</p>";
             return;
         }
         
-        // 已在 loadCustomerDataIntoUI 中排序
-        // allCustomerAssessments.sort((a,b) => (b.submittedAt.seconds || 0) - (a.submittedAt.seconds || 0));
-
-        // (渲染 HTML 的邏輯與 MOCK_DB 版本相似，但使用 formatFirestoreTimestampForDisplay 處理 submittedAt)
-        // 例如: formatFirestoreTimestampForDisplay(asm.submittedAt)
-        // ... (渲染及事件綁定)
-        let html = `<div class="overflow-x-auto">
-                        <div class="min-w-[500px]">
-                            <div class="grid grid-cols-[2fr_1fr_1fr] gap-x-2 md:gap-x-3 py-2 border-b border-gray-300 font-semibold text-sm">
-                                <span>問卷名稱</span>
-                                <span class="text-center">填寫日期</span>
-                                <span class="text-center">檔案</span>
-                            </div>`;
+        let html = `<div class="overflow-x-auto"><div class="min-w-[500px]">
+            <div class="grid grid-cols-[2fr_1fr_1fr] gap-x-2 md:gap-x-3 py-2 border-b border-gray-300 font-semibold text-sm">
+                <span>問卷名稱</span>
+                <span class="text-center">填寫日期</span>
+                <span class="text-center">檔案</span>
+            </div>`;
         allCustomerAssessments.forEach(asm => {
+            // asm.id 是 assessmentRecord 的 Firestore ID
+            // asm.formTypeKey 是問卷類型，例如 'tab1', 'tab2'
+            // asm.customerId 在 Firestore 中儲存的是客戶的 displayCustomerId
+
+            // 從 currentEditingCustomerData 獲取用於連結的 displayCustomerId 和 name
+            // 確保 currentEditingCustomerData 已被正確載入且包含所需資訊
+            const customerDisplayIdForLink = currentEditingCustomerData ? currentEditingCustomerData.displayCustomerId : 'N/A';
+            const customerNameForLink = currentEditingCustomerData ? currentEditingCustomerData.name : 'Unknown';
+
             html += `
                 <div class="assessment-row grid grid-cols-[2fr_1fr_1fr] gap-x-2 md:gap-x-3 items-center py-2.5 border-b border-gray-100 text-sm">
                     <span class="truncate pr-1">${asm.formTypeName || asm.formTypeKey || 'N/A'}</span>
                     <span class="text-center text-gray-600">${formatFirestoreTimestampForDisplay(asm.submittedAt)}</span>
                     <span class="text-center">
-                        ${asm.fileLink ? `<a href="${asm.fileLink}" target="_blank" rel="noopener noreferrer" class="action-button text-xs" title="在新分頁開啟問卷檔案">查看檔案</a>` : '無檔案'}
+                        <button 
+                            class="action-button text-xs view-assessment-file-btn" 
+                            data-record-id="${asm.id}" 
+                            data-form-type="${asm.formTypeKey}"
+                            title="在新視窗開啟問卷結果">查看檔案</button>
                     </span>
                 </div>`;
         });
-        html += `</div></div>`;
+
+        html += `</div></div>`; // 閉合 overflow-x-auto 和 min-w-[500px] 的 div
         assessmentHistoryContent.innerHTML = html;
+
+        assessmentHistoryContent.querySelectorAll('.view-assessment-file-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const recordId = this.dataset.recordId;
+                const formType = this.dataset.formType;
+
+                if (currentLoadedCustomerId && currentEditingCustomerData && currentEditingCustomerData.displayCustomerId && currentEditingCustomerData.name && recordId && formType) {
+                    const customerFirestoreId = currentLoadedCustomerId;
+                    const customerDisplayId = currentEditingCustomerData.displayCustomerId;
+                    const customerName = currentEditingCustomerData.name;
+
+                    // ✨ 修改：呼叫父視窗的 showPage 函數 ✨
+                    const queryParams = `?recordId=<span class="math-inline">\{recordId\}&customerID\=</span>{customerFirestoreId}&displayID=<span class="math-inline">\{customerDisplayId\}&name\=</span>{encodeURIComponent(customerName)}&formType=${formType}&mode=view`;
+                    if (window.parent && typeof window.parent.showPage === 'function') {
+                        console.log("[customers.js] Calling parent.showPage for assessment view with params:", queryParams);
+                        window.parent.showPage('assessment.html', window.parent.document.getElementById('menu-assessment'), queryParams);
+                    } else {
+                        console.error("[customers.js] Cannot find parent.showPage function for assessment view.");
+                        alert("無法開啟問卷記錄，系統通訊錯誤。");
+                    }
+                } else {
+                    alert("無法取得足夠資訊開啟問卷。請確保客戶資料已載入。");
+                }
+            });
+        });       
     }
 
-    // --- Event Listeners Setup (大部分與您提供的版本相似) ---
-    // 確保所有事件監聽器都在 DOM 元素確定存在後綁定
+    // --- Event Listeners Setup ---
     if(searchButton) searchButton.addEventListener("click", handleSearchCustomer);
-    if(searchNameInput) searchNameInput.addEventListener("keypress", function(event) { if (event.key === "Enter") handleSearchCustomer(); });
-    if(searchPhoneInput) searchPhoneInput.addEventListener("keypress", function(event) { if (event.key === "Enter") handleSearchCustomer(); });
-    // if(searchEmailInput) searchEmailInput.addEventListener("keypress", function(event) { if (event.key === "Enter") handleSearchCustomer(); }); // Email 搜尋已移除
+    [searchNameInput, searchPhoneInput, searchDisplayIdInput].forEach(input => { // 加入 displayId
+        if(input) input.addEventListener("keypress", function(event) { if (event.key === "Enter") handleSearchCustomer(); });
+    });
     if(clearSearchButton) clearSearchButton.addEventListener("click", clearSearchForm);
 
     if(createButton) createButton.addEventListener("click", handleCreateCustomer);
     if(clearAddCustomerButton) clearAddCustomerButton.addEventListener("click", clearAddCustomerForm);
-
-    // Email 輸入自動轉小寫 (保留於表單中)
-    if(addEmailInput) addEmailInput.addEventListener('input', handleEmailInputToLowercase);
+    // 移除 addEmailInput 的事件監聽器，因為該欄位已從新增表單移除
     
     if(editCustomerButtonHeader) {
         editCustomerButtonHeader.addEventListener("click", () => {
-            const customerFirestoreId = currentLoadedCustomerId;
-             if (!customerFirestoreId || !currentEditingCustomerData || currentEditingCustomerData.firestoreId !== customerFirestoreId ) { // 確保 currentEditingCustomerData 是當前客戶的
-                 displayGeneralMessage(document.getElementById('edit-customer-message') || searchMessage, "無法載入客戶資料進行編輯，請重新查詢。", true);
-                return;
+            if (!currentLoadedCustomerId || !currentEditingCustomerData || currentEditingCustomerData.firestoreId !== currentLoadedCustomerId ) {
+                 displayGeneralMessage(document.getElementById('edit-customer-message') || searchMessage, "無法載入客戶資料進行編輯，請重新查詢。", true); return;
             }
             toggleCustomerInfoEditMode(true);
         });
     }
-
-    if(cancelEditCustomerButton) {
-        cancelEditCustomerButton.addEventListener("click", () => {
-            toggleCustomerInfoEditMode(false); 
-        });
-    }
-    if(saveCustomerChangesButton) {
-        saveCustomerChangesButton.addEventListener("click", handleSaveCustomerChanges);
-    }
+    if(cancelEditCustomerButton) cancelEditCustomerButton.addEventListener("click", () => toggleCustomerInfoEditMode(false));
+    if(saveCustomerChangesButton) saveCustomerChangesButton.addEventListener("click", handleSaveCustomerChanges);
 
     if(addAssessmentButton) {
-        addAssessmentButton.addEventListener("click", () => { 
-            const customerFirestoreId = currentLoadedCustomerId;
-            if (!customerFirestoreId) {
-                displayGeneralMessage(searchMessage || addMessage, "請先查詢或建立客戶資料，才能新增問卷。", true); return;
-            }
-            const parentFrame = window.parent.document.getElementById('content-frame');
-            const assessmentPageUrl = `assessment.html?customerID=${customerFirestoreId}`; // 傳遞 Firestore Doc ID
-            const fullUrl = new URL(assessmentPageUrl, window.parent.location.href).href;
-
-            if (parentFrame) { 
-                parentFrame.src = fullUrl; 
-                if (window.parent.updateActiveMenuFromChild) { 
-                    window.parent.updateActiveMenuFromChild("menu-assessment");
+            addAssessmentButton.addEventListener("click", () => {
+                if (!currentLoadedCustomerId || !currentEditingCustomerData || !currentEditingCustomerData.displayCustomerId || !currentEditingCustomerData.name) {
+                    displayGeneralMessage(searchMessage || addMessage, "請先查詢並完整載入客戶資料以新增問卷。", true);
+                    return;
                 }
-            } else { 
-                window.location.href = assessmentPageUrl; 
+
+                const customerFirestoreId = currentLoadedCustomerId;
+                const displayCustId = currentEditingCustomerData.displayCustomerId;
+                const custName = currentEditingCustomerData.name;
+
+                // 構建符合需求的 URL
+                const assessmentUrl = `index.html?page=assessment&customerID=${customerFirestoreId}&displayID=${displayCustId}&name=${encodeURIComponent(custName)}`;
+
+                console.log("[customers.js] Opening new window for assessment with URL:", assessmentUrl);
+
+                // 使用 window.open 在新視窗/分頁開啟
+                const newWindow = window.open(assessmentUrl, '_blank');
+                if (newWindow) {
+                    newWindow.focus(); // 嘗試將焦點轉到新視窗
+                } else {
+                    // 如果瀏覽器阻止了彈出視窗
+                    alert("無法開啟新視窗。請檢查您的瀏覽器是否封鎖了彈出式視窗，或手動複製以下連結開啟：\n" + assessmentUrl);
+                    console.warn("[customers.js] New window was blocked by the browser or failed to open.");
+                }
+            });
+        }
+
+    if(gotoAssessmentRecordsButton) {
+        gotoAssessmentRecordsButton.addEventListener("click", async () => {
+            if (!assessmentRecordsSection) return;
+            if (assessmentRecordsSection.classList.contains("hidden")) {
+                await loadAssessmentHistoryLazy(); // 如果區塊是隱藏的，則加載資料
+                assessmentRecordsSection.classList.remove("hidden");
             }
-        });
-    }
-    if(gotoAssessmentRecordsButton) { /* ... 與您版本相同 ... */
-        gotoAssessmentRecordsButton.addEventListener("click", () => {
-            const assessmentSection = document.getElementById("assessment-records-section");
-            if (assessmentSection) {
-                assessmentSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
+            assessmentRecordsSection.scrollIntoView({ behavior: "smooth", block: "start" });
         });
     }
 
-    if(showAddTreatmentBtn) { /* ... 與您版本相同，但確保 populateTreatmentCategories 被呼叫 ... */
-        showAddTreatmentBtn.addEventListener("click", () => { 
+    if(showAddTreatmentBtn) {
+        showAddTreatmentBtn.addEventListener("click", () => {
             if(addTreatmentFormContainer) {
                 addTreatmentFormContainer.classList.toggle('hidden');
                 if (!addTreatmentFormContainer.classList.contains('hidden')) {
-                    populateTreatmentCategories(); 
+                    populateTreatmentCategories();
                     if(addTreatmentFirstUseDateTimeInput) setDateTimeInputDefault(addTreatmentFirstUseDateTimeInput);
-                    displayGeneralMessage(addTreatmentMessage, "", false); 
+                    if(addTreatmentAmountInput) addTreatmentAmountInput.value = ''; // 清空金額
+                    displayGeneralMessage(addTreatmentMessage, "", false);
                 }
             }
         });
     }
     if(addTreatmentCategorySelect) addTreatmentCategorySelect.addEventListener('change', populateTreatmentNames);
-    if(addTreatmentNameSelect) addTreatmentNameSelect.addEventListener('change', handleTreatmentNameChange); 
+    if(addTreatmentNameSelect) addTreatmentNameSelect.addEventListener('change', handleTreatmentNameChange);
     if(submitAddTreatmentButton) submitAddTreatmentButton.addEventListener('click', handleAddTreatmentPurchase);
-    if(cancelAddTreatmentButton) { /* ... 與您版本相同 ... */
-        cancelAddTreatmentButton.addEventListener('click', () => { 
+    if(cancelAddTreatmentButton) {
+        cancelAddTreatmentButton.addEventListener('click', () => {
             if(addTreatmentFormContainer) addTreatmentFormContainer.classList.add('hidden');
-            displayGeneralMessage(addTreatmentMessage, "", false); 
+            displayGeneralMessage(addTreatmentMessage, "", false);
         });
     }
     
-    // 療程和預約篩選器的事件監聽 (與您版本相似，確保在重新渲染時調用正確的 packageId)
+    // 療程歷史篩選器
     if(treatmentFilterPending) treatmentFilterPending.addEventListener('change', renderTreatmentHistory);
     if(treatmentFilterCompleted) treatmentFilterCompleted.addEventListener('change', renderTreatmentHistory);
     if(treatmentFilterRevoked) treatmentFilterRevoked.addEventListener('change', renderTreatmentHistory);
     
-    const appointmentFilters = [appointmentFilterBooked, appointmentFilterCompleted, appointmentFilterCancelled];
-    appointmentFilters.forEach(filter => {
-        if (filter) {
-            filter.addEventListener('change', () => {
-                const selectedTreatmentRow = treatmentHistoryContent ? treatmentHistoryContent.querySelector('.treatment-row.selected') : null;
-                const currentSelectedPackageId = selectedTreatmentRow ? selectedTreatmentRow.dataset.treatmentId : null; // dataset.treatmentId 存的是 packageId
-                renderAppointmentHistory(currentSelectedPackageId, !currentSelectedPackageId);
-            });
-        }
+    // 預約歷史篩選器
+    [appointmentFilterBooked, appointmentFilterCompleted, appointmentFilterCancelled].forEach(filter => {
+        if (filter) filter.addEventListener('change', () => {
+            const selRow = treatmentHistoryContent ? treatmentHistoryContent.querySelector('.treatment-row.selected') : null;
+            renderAppointmentHistory(selRow ? selRow.dataset.treatmentId : null, !selRow);
+        });
     });
 
+    // 註銷療程相關
     if (confirmRevokeBtn) confirmRevokeBtn.addEventListener('click', handleRevokeTreatment);
     if (cancelRevokeBtn) cancelRevokeBtn.addEventListener('click', () => {
         if(revokeTreatmentModal) revokeTreatmentModal.classList.add('hidden');
         currentTreatmentPackageToRevokeId = null;
+        if (confirmRevokeBtn) { confirmRevokeBtn.disabled = false; confirmRevokeBtn.textContent = "確認送出註銷"; }
+        if (cancelRevokeBtn) cancelRevokeBtn.disabled = false;
     });
     
-    if(statusMenuConfirmBtn) statusMenuConfirmBtn.addEventListener("click", handleUpdateAppointmentStatus);
-    if(statusMenuCancelBtn) statusMenuCancelBtn.addEventListener("click", () => {
-        if(statusUpdateMenu) statusUpdateMenu.classList.add("hidden");
+    // 點擊頁面其他地方關閉動態狀態選單
+    document.addEventListener('click', function(event) {
+        const dynMenu = document.getElementById('dynamic-status-menu');
+        const actBtn = document.querySelector('.open-status-change-menu-btn.status-menu-active');
+        if (dynMenu && (!dynMenu.contains(event.target) && (!actBtn || !actBtn.contains(event.target)))) {
+            dynMenu.remove(); if(actBtn) actBtn.classList.remove('status-menu-active');
+        }
     });
     
-    // 點擊選單外部時隱藏選單 (與您版本相同)
-    document.addEventListener('click', function(event) { 
-        if (statusUpdateMenu && !statusUpdateMenu.classList.contains('hidden')) {
-            const isClickInsideMenu = statusUpdateMenu.contains(event.target);
-            const isClickOnOpenButton = event.target.classList.contains('open-status-menu-btn') || (event.target.closest && event.target.closest('.open-status-menu-btn'));
-            if (!isClickInsideMenu && !isClickOnOpenButton) {
-                statusUpdateMenu.classList.add('hidden');
-            }
+    // 確保舊的狀態選單被隱藏
+    if (statusUpdateMenuOld) statusUpdateMenuOld.classList.add('hidden');
+
+
+    // --- Message Listener for responses from parent window ---
+    window.addEventListener('message', (event) => {
+        if (event.origin !== window.parent.location.origin) {
+            console.warn("[customers.js] Message from unknown origin ignored:", event.origin);
+            return;
+        }
+        console.log("[customers.js] Received message from parent:", JSON.parse(JSON.stringify(event.data)));
+
+        const data = event.data;
+        const payload = data.payload; // 保持 payload 方便取用
+
+        // 重設按鈕狀態的輔助函數
+        function resetButtonStates(primaryBtn, primaryText, secondaryBtn = null, alsoEnableSecondary = true) {
+            if (primaryBtn) { primaryBtn.disabled = false; primaryBtn.textContent = primaryText; }
+            if (secondaryBtn && alsoEnableSecondary) { secondaryBtn.disabled = false; }
+            else if (secondaryBtn) { secondaryBtn.disabled = false; } // 僅確保啟用
+        }
+        
+        switch (data.type) {
+            case 'SAVE_NEW_CUSTOMER_SUCCESS':
+                displayGeneralMessage(addMessage, `客戶 ${data.displayId} (${data.customerName}) 資料已建立！`, false);
+                setTimeout(async () => {
+                    clearAddCustomerForm(); if (data.customerId) await loadCustomerDataIntoUI(data.customerId);
+                    showUiSection(customerDataSection, true);
+                }, 1500);
+                resetButtonStates(createButton, "建立客戶資料");
+                break;
+            case 'SAVE_NEW_CUSTOMER_ERROR':
+                displayGeneralMessage(addMessage, `建立錯誤: ${data.message}`, true);
+                resetButtonStates(createButton, "建立客戶資料");
+                break;
+
+            case 'SAVE_CUSTOMER_CHANGES_SUCCESS':
+                currentEditingCustomerData = data.updatedCustomerData;
+                displayGeneralMessage(document.getElementById('edit-customer-message'), "客戶資料已更新！", false);
+                setTimeout(() => toggleCustomerInfoEditMode(false), 1000);
+                resetButtonStates(saveCustomerChangesButton, "儲存", cancelEditCustomerButton);
+                break;
+            case 'SAVE_CUSTOMER_CHANGES_ERROR':
+                displayGeneralMessage(document.getElementById('edit-customer-message'), `更新失敗: ${data.message}`, true);
+                resetButtonStates(saveCustomerChangesButton, "儲存", cancelEditCustomerButton);
+                break;
+            
+            case 'ADD_TREATMENT_PURCHASE_SUCCESS':
+                displayGeneralMessage(addTreatmentMessage, "療程購買及首次預約已成功新增！", false);
+                if(addTreatmentFormContainer) addTreatmentFormContainer.classList.add('hidden');
+                // 清空表單欄位
+                if(addTreatmentCategorySelect) addTreatmentCategorySelect.value = "";
+                if(addTreatmentNameSelect) populateTreatmentNames(); // 這會清空名稱並重設數量
+                if(addTreatmentAmountInput) addTreatmentAmountInput.value = "";
+                if(addTreatmentFirstUseDateTimeInput) setDateTimeInputDefault(addTreatmentFirstUseDateTimeInput);
+
+                resetButtonStates(submitAddTreatmentButton, "確認購買", cancelAddTreatmentButton);
+                if (currentLoadedCustomerId) {
+                    loadCustomerDataIntoUI(currentLoadedCustomerId).then(() => {
+                        const newPkgRow = treatmentHistoryContent.querySelector(`.treatment-row[data-treatment-id="${data.packageId}"]`);
+                        if (newPkgRow) {
+                             // 確保新購買的療程被選中並顯示其預約
+                             if (treatmentHistoryContent.querySelector('.treatment-row.selected') !== newPkgRow) {
+                                newPkgRow.click(); // 會觸發 renderTreatmentHistory 和 renderAppointmentHistory
+                             } else {
+                                // 如果已經是選中的（不太可能剛新增就選中，除非UI操作很快）
+                                renderAppointmentHistory(data.packageId, false);
+                             }
+                        }
+                    });
+                }
+                break;
+            case 'ADD_TREATMENT_PURCHASE_ERROR':
+                displayGeneralMessage(addTreatmentMessage, `新增失敗: ${data.message}`, true);
+                resetButtonStates(submitAddTreatmentButton, "確認購買", cancelAddTreatmentButton);
+                break;
+
+            case 'ADD_INLINE_APPOINTMENT_SUCCESS':
+                // 從 payload 中獲取 packageId，因為 data 可能沒有直接的 packageId
+                const successPkgId = payload?.packageId || data.packageId;
+                const formToRm = document.getElementById(`inline-form-${successPkgId}`);
+                if (formToRm) formToRm.remove();
+                
+                displayGeneralMessage(addTreatmentMessage, "預約成功！", false); // 使用一個通用的提示區域
+                setTimeout(() => displayGeneralMessage(addTreatmentMessage, "", false), 3000);
+
+                if (currentLoadedCustomerId) {
+                    loadCustomerDataIntoUI(currentLoadedCustomerId).then(() => {
+                        const trRow = treatmentHistoryContent.querySelector(`.treatment-row[data-treatment-id="${successPkgId}"]`);
+                        if (trRow) {
+                            if (!trRow.classList.contains('selected')) trRow.click(); // 選中該療程
+                            else renderAppointmentHistory(successPkgId, false); // 如果已選中，僅刷新預約
+                        } else {
+                            renderAppointmentHistory(null, true); // 如果找不到療程行，刷新所有預約
+                        }
+                        renderTreatmentHistory(); // 刷新療程列表（可能次數等有變動）
+                    });
+                }
+                break;
+            case 'ADD_INLINE_APPOINTMENT_ERROR':
+                console.error("[customers.js] Matched ADD_INLINE_APPOINTMENT_ERROR. Payload:", data);
+                
+                let targetMessageElement = null; // 用於顯示錯誤訊息的目標 DOM 元素
+                let submitBtnToReset = null;
+                let cancelBtnToReset = null;
+                const pkgIdFromError = data.payload?.packageId;
+
+                if (pkgIdFromError) {
+                    const inlineFormElement = document.getElementById(`inline-form-${pkgIdFromError}`);
+                    if (inlineFormElement && inlineFormElement.classList.contains('inline-appointment-form') && !inlineFormElement.classList.contains('hidden')) {
+                        // 找到了對應的、當前可見的行內預約表單
+                        targetMessageElement = inlineFormElement.querySelector(".inline-appointment-message");
+                        submitBtnToReset = inlineFormElement.querySelector('.submit-inline-appointment');
+                        cancelBtnToReset = inlineFormElement.querySelector('.cancel-inline-appointment');
+
+                        if (!targetMessageElement) {
+                            console.warn(`[customers.js] Inline form (ID: inline-form-${pkgIdFromError}) is visible, but its .inline-appointment-message element is missing. Attempting to use a general fallback, but this might not be the correct UI location.`);
+                            // 如果行內表單可見，但缺少訊息 P 標籤，這是一個 HTML 結構問題。
+                            // 仍然嘗試回退，但理想情況下不應發生。
+                            targetMessageElement = addTreatmentMessage; // 或設為 null 以觸發 alert
+                        } else {
+                            console.log("[customers.js] Found specific .inline-appointment-message element for error display within form:", inlineFormElement.id);
+                        }
+                    } else {
+                        console.warn(`[customers.js] Could not find an active/visible inline form (ID: inline-form-${pkgIdFromError}) for error display. The form might have been removed or hidden. Using general fallback.`);
+                        targetMessageElement = addTreatmentMessage; // 如果找不到活動的行內表單，則回退
+                    }
+                } else {
+                     console.warn("[customers.js] No packageId in ADD_INLINE_APPOINTMENT_ERROR payload. Using general fallback message display (addTreatmentMessage).");
+                     targetMessageElement = addTreatmentMessage; // 如果 payload 中沒有 packageId，也回退
+                }
+                
+                // 顯示錯誤訊息
+                if (targetMessageElement) {
+                    // 如果回退到 addTreatmentMessage，且其容器是隱藏的，用戶可能看不到
+                    if (targetMessageElement === addTreatmentMessage && addTreatmentFormContainer && addTreatmentFormContainer.classList.contains('hidden')) {
+                        console.warn("[customers.js] Fallback error message area (addTreatmentMessage) is inside a hidden container. Error might not be visible to the user.");
+                        // 在這種情況下，可以考慮強制顯示 addTreatmentFormContainer，或者使用 alert
+                        // addTreatmentFormContainer.classList.remove('hidden'); // 可選：強制顯示包含 addTreatmentMessage 的容器
+                        alert(`預約失敗 (請檢查主新增區塊的提示): ${data.message}`); // 或者直接 alert
+                    }
+                    displayGeneralMessage(targetMessageElement, `預約失敗: ${data.message}`, true);
+                } else {
+                    // 如果連 addTreatmentMessage 都沒找到（理論上不應該，除非 addTreatmentMessage 的 ID 也變了）
+                    console.error("[customers.js] No message element found at all (neither specific inline nor fallback addTreatmentMessage). Alerting error.");
+                    alert(`新增預約失敗: ${data.message}`); // 最終的 fallback
+                }
+
+                // 重設按鈕狀態 (如果找到了對應的按鈕)
+                if (submitBtnToReset) {
+                    submitBtnToReset.disabled = false;
+                    submitBtnToReset.textContent = "確認預約";
+                }
+                if (cancelBtnToReset) {
+                    cancelBtnToReset.disabled = false;
+                }
+                break;
+
+            case 'REVOKE_TREATMENT_PACKAGE_SUCCESS':
+                displayGeneralMessage(revokeModalMessage, "療程已成功註銷。", false);
+                setTimeout(() => { if (revokeTreatmentModal) revokeTreatmentModal.classList.add('hidden'); }, 1500);
+                currentTreatmentPackageToRevokeId = null;
+                resetButtonStates(confirmRevokeBtn, "確認送出註銷", cancelRevokeBtn, true);
+                if (currentLoadedCustomerId) loadCustomerDataIntoUI(currentLoadedCustomerId);
+                break;
+            case 'REVOKE_TREATMENT_PACKAGE_ERROR':
+                displayGeneralMessage(revokeModalMessage, `註銷失敗: ${data.message}`, true);
+                resetButtonStates(confirmRevokeBtn, "確認送出註銷", cancelRevokeBtn, true);
+                break;
+
+            case 'UPDATE_APPOINTMENT_STATUS_SUCCESS':
+                const custIdReload = payload?.customerFirestoreId || data.customerFirestoreId;
+                if (custIdReload) loadCustomerDataIntoUI(custIdReload);
+                // 新的動態選單不需要重置按鈕，因為它在操作後會自動移除
+                break;
+            case 'UPDATE_APPOINTMENT_STATUS_ERROR':
+                alert(`更新預約狀態失敗: ${data.message}`);
+                // 新的動態選單不需要重置按鈕
+                break;
+            
+            case 'UPDATE_TREATMENT_UNITS_SUCCESS':
+                displayGeneralMessage(addTreatmentMessage, "療程數量已更新。", false); // 使用通用訊息區
+                setTimeout(() => displayGeneralMessage(addTreatmentMessage, "", false), 2000);
+                if (currentLoadedCustomerId) {
+                     loadCustomerDataIntoUI(currentLoadedCustomerId).then(() => {
+                        const pkgId = payload?.packageId;
+                        if (pkgId) {
+                            const trRow = treatmentHistoryContent.querySelector(`.treatment-row[data-treatment-id="${pkgId}"]`);
+                             // 如果被編輯的療程仍然是選中狀態，刷新其預約列表
+                             if (trRow && trRow.classList.contains('selected')) {
+                                renderAppointmentHistory(pkgId, false);
+                             }
+                             // 編輯表單應該已經在 loadCustomerDataIntoUI 中被清除了，因為會重新 renderTreatmentHistory
+                        }
+                     });
+                }
+                break;
+            case 'UPDATE_TREATMENT_UNITS_ERROR':
+                 const pkgIdUnitErr = payload?.packageId;
+                 let unitEditMsgEl = addTreatmentMessage; // 通用訊息區作為回退
+                 const errFormUnits = document.querySelector(`.treatment-row[data-treatment-id="${pkgIdUnitErr}"] .inline-edit-treatment-units-active-form`);
+                 if (errFormUnits) {
+                     unitEditMsgEl = errFormUnits.querySelector('.inline-edit-units-message') || unitEditMsgEl;
+                     resetButtonStates(errFormUnits.querySelector('.save-inline-edit-units'), "儲存", errFormUnits.querySelector('.cancel-inline-edit-units'), true);
+                 }
+                 displayGeneralMessage(unitEditMsgEl, `數量更新失敗: ${data.message}`, true);
+                break;
+            default: 
+                console.log("[customers.js] Received unhandled message from parent:", data.type);
+                break;
         }
     });
     
     // Initial UI state
-    showUiSection(searchSection, true); 
+    showUiSection(searchSection, true);
+    if (statusUpdateMenuOld) statusUpdateMenuOld.classList.add('hidden'); // 確保舊選單隱藏
     console.log("[customers.js] initializePage() finished.");
 }
 

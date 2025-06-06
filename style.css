@@ -210,6 +210,44 @@ input.custom-form-input:invalid {
 }
 .action-button-secondary:hover { background-color: #fee2e2; color: #dc2626; }
 
+.button-used-up {
+  display: inline-flex; /* 與 action-button 保持一致 */
+  align-items: center; /* 與 action-button 保持一致 */
+  justify-content: center; /* 與 action-button 保持一致 */
+  min-width: 5rem; /* 根據內容調整寬度 */
+  cursor: not-allowed; /* 表示不可點擊 */
+  height: 2.5rem; /* 高度由 padding 和內容決定，更靈活 */
+  padding: 0 0.75rem; /* 參考 text-xs 的 padding，可以微調 */
+  border-radius: 6px; /* 與 action-button 保持一致 */
+  background-color: #e5e7eb; /* Tailwind gray-200 */
+  color: #6b7280; /* Tailwind gray-500 */
+  font-size: 0.875rem; /* text-xs */
+  line-height: 1rem; /* text-xs 對應的 line-height */
+  font-weight: normal; /* 非粗體 */
+  border: 1px solid #d1d5db; /* Tailwind gray-300，可選 */
+  white-space: nowrap; /* 與 "新增預約" 按鈕一致 */
+  transition: none; /* 通常禁用狀態的按鈕不需要過渡效果 */
+}
+
+.button-revoked {
+  display: inline-flex; /* 與 action-button 保持一致 */
+  align-items: center; /* 與 action-button 保持一致 */
+  justify-content: center; /* 與 action-button 保持一致 */
+  min-width: 5rem; /* 根據內容調整寬度 */
+  cursor: default; /* 或 not-allowed，表示不可操作 */
+  height: 2.5rem; /* 高度由 padding 和內容決定 */
+  padding: 0 0.75rem; /* 參考 text-xs 的 padding */
+  border-radius: 6px; /* 與 action-button 保持一致 */
+  background-color: #fee2e2; /* Tailwind red-100 (淺紅) */
+  color: #ef4444; /* Tailwind red-500 (較深的紅字) */
+  font-size: 0.875rem; /* text-xs */
+  line-height: 1rem; /* text-xs 對應的 line-height */
+  font-weight: 500; /* 可以用 medium weight */
+  border: 1px solid #fca5a5; /* Tailwind red-300 (淺紅邊框) */
+  white-space: nowrap; /* 與 "新增預約" 按鈕一致 */
+  transition: none;
+}
+
 /* ==========================================================================
    Customer Page Specific Styles
    ========================================================================== */

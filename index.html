@@ -7,78 +7,113 @@
   <link rel="stylesheet" as="style" onload="this.rel='stylesheet'"
     href="https://fonts.googleapis.com/css2?display=swap&amp;family=Manrope%3Awght%40400%3B500%3B700%3B800&amp;family=Noto+Sans%3Awght%40400%3B500%3B700%3B900" />
   <title>致好醫學診所 - 管理系統</title>
-  <link rel="icon" type="image/x-icon" href="https://g27866.github.io/wellbeing_assessment/we_c_a4.png" />
+  <link rel="icon" type="image/x-icon" href="/image/we_c_a4.png" />
   <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
   <link rel="stylesheet" href="/style.css">
   <style>
-    body, html {
-        margin: 0;
-        padding: 0;
-        height: 100%;
-        overflow: hidden; /* 防止主頁面滾動 */
-        background-color: #f8fcfb;
+    body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background-color: #f8fcfb; }
+    #main-container { display: flex; flex-direction: column; height: 100vh; }
+    #frame-container { flex-grow: 1; position: relative; }
+    #frame-container iframe.dynamic-page-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: none; }
+    .menu-link.active { font-weight: bold; color: #009378; }
+
+    /* Hamburger Styles */
+    #hamburger-button {
+        display: none; /* JS 控制：登入後才顯示 */
+        padding: 0.5rem;
+        border-radius: 0.375rem; /* rounded-md */
+        z-index: 30;
+        color: #374151; /* gray-700 for icon color */
+        position: relative; /* 相對定位，以便下拉選單能相對於它 */
     }
-    #main-container {
-        display: flex;
-        flex-direction: column;
-        height: 100vh;
+    #hamburger-icon { width: 24px; height: 18px; display: flex; flex-direction: column; justify-content: space-between; }
+    #hamburger-icon span { display: block; background-color: currentColor; height: 2px; border-radius: 1px; transition: all 0.3s ease-in-out; }
+    #hamburger-icon span:nth-child(1) { width: 22px; }
+    #hamburger-icon span:nth-child(2) { width: 16px; }
+    #hamburger-icon span:nth-child(3) { width: 22px; }
+
+    #hamburger-button.open #hamburger-icon span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+    #hamburger-button.open #hamburger-icon span:nth-child(2) { opacity: 0; }
+    #hamburger-button.open #hamburger-icon span:nth-child(3) { width: 22px; transform: translateY(-7px) rotate(-45deg); }
+
+    /* Dropdown Menu Container (由漢堡按鈕控制) */
+    #dropdown-menu {
+        display: none; /* JS 控制顯示/隱藏 */
+        position: absolute;
+        top: calc(100% + 8px); /* 在漢堡按鈕下方，留點間距 */
+        right: 0; /* 對齊漢堡按鈕右側 */
+        min-width: 220px;
+        background-color: white;
+        box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1);
+        border-radius: 0.5rem; /* rounded-lg */
+        z-index: 20;
+        padding: 0.5rem 0;
+        border: 1px solid #e5e7eb; /* gray-200 */
     }
-    #content-frame {
-        flex-grow: 1; /* 讓 iframe 填滿剩餘空間 */
-        border: none; /* 移除 iframe 邊框 */
-        width: 100%;
+    #dropdown-menu.menu-open { display: block; }
+
+    #dropdown-menu a,
+    #dropdown-menu button#auth-button-dropdown { /* 登出按鈕在下拉選單中的樣式 */
+        padding: 0.75rem 1.5rem;
+        display: block;
+        width: 100%; /* 讓項目填滿下拉選單寬度 */
+        text-align: left;
+        color: #111816; font-size: 0.875rem; font-weight: 500;
+        box-sizing: border-box; /* 確保 padding 不會撐大寬度 */
     }
-    .menu-link.active {
-        font-weight: bold;
-        color: #009378; /* Active link color */
-        text-decoration: underline;
+    #dropdown-menu a:hover,
+    #dropdown-menu button#auth-button-dropdown:hover {
+        background-color: #f9fafb; /* gray-50 */
     }
-    /* 讓未登入時的 iframe 看起來比較不突兀 */
-    #content-frame.empty {
-        background-color: #e9ecef; /* 或者一個輕微的背景色 */
+     /* 登入按鈕 (未登入時顯示，不在下拉選單內) */
+    #auth-button-login {
+        display: none; /* JS控制：未登入時顯示 */
     }
   </style>
 
-    <script defer src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
-    <script defer src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
-    <script defer src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
-    <script defer src="https://www.gstatic.com/firebasejs/9.22.1/firebase-functions-compat.js"></script>
-
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-functions.js"></script>
 </head>
 
 <body>
   <div id="main-container">
-    <header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-b-[#f0f5f3] px-10 py-3 bg-white shadow-sm">
+    <header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-b-[#f0f5f3] px-4 md:px-10 py-3 bg-white shadow-sm">
       <div class="flex items-center gap-4 text-[#111816]">
-        <div class="size-5">
-          <img src="https://g27866.github.io/wellbeing_assessment/we_c_a4.png" alt="致好醫學診所 Logo"
-            class="w-full h-full object-contain" />
-        </div>
-        <h2 class="text-[#111816] text-lg font-bold leading-tight tracking-[-0.015em]">
-          致好醫學診所
-        </h2>
+        <div class="size-5"><img src="/image/we_c_a4.png" alt="Logo" class="w-full h-full object-contain" /></div>
+        <h2 class="text-[#111816] text-lg font-bold">致好醫學診所</h2>
       </div>
-      <div class="flex flex-1 justify-end gap-8">
-        <nav class="flex items-center gap-9">
-          <a id="menu-customers" class="text-[#111816] text-sm font-medium leading-normal menu-link" href="#" data-src="customers.html" style="display: none;">客戶資料</a>
-          <a id="menu-assessment" class="text-[#111816] text-sm font-medium leading-normal menu-link" href="#" data-src="assessment.html" style="display: none;">問卷填寫</a>
-          <a id="menu-calendar" class="text-[#111816] text-sm font-medium leading-normal menu-link" href="#" data-src="calendar.html" style="display: none;">行事曆</a>
-        </nav>
-        <button id="auth-button" class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-[#f0f5f3] text-[#111816] text-sm font-bold leading-normal tracking-[0.015em]">
-          <span id="auth-button-text" class="truncate">Login</span>
+
+      <div id="header-right-options" class="flex items-center relative"> 
+        <button id="hamburger-button" aria-label="主選單" aria-expanded="false">
+            <div id="hamburger-icon"><span></span><span></span><span></span></div>
+        </button>
+
+        <div id="dropdown-menu">
+            <nav id="main-navigation-menu">
+              <a id="menu-customers" class="menu-link" href="#" data-src="customers.html" style="display: none;">客戶資料</a>
+              <a id="menu-assessment" class="menu-link" href="#" data-src="assessment.html" style="display: none;">問卷填寫</a>
+              <a id="menu-calendar" class="menu-link" href="#" data-src="calendar.html" style="display: none;">行事曆</a>
+            </nav>
+
+            <button id="auth-button-dropdown" class="flex w-full cursor-pointer items-center justify-start overflow-hidden px-4 py-2 bg-transparent text-[#111816] text-sm font-bold">
+              <span id="auth-button-text-dropdown" class="truncate">登出</span>
+            </button>
+        </div>
+
+        <button id="auth-button-login" class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-[#f0f5f3] text-[#111816] text-sm font-bold">
+          <span id="auth-button-text-login" class="truncate">Login</span>
         </button>
       </div>
     </header>
 
-    <iframe id="content-frame" src="about:blank" title="Content Area" class="empty"></iframe>
-
+    <div id="frame-container" class="flex-grow relative"></div>
   </div>
 
-  <button id="scrollToTopBtn" title="回到頂部">
+
     <span>&#8679;</span>
   </button>
-
   <script src="main.js"></script>
-
 </body>
 </html>

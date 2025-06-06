@@ -9,9 +9,38 @@
     <style>
         body { margin: 0; padding: 0; background-color: transparent; }
         /*.page-container { padding: 1rem; } /* 如果您的問卷內容需要內距 */
+
+        /* 新增懸浮提示樣式 */
+        #assessment-success-toast {
+            display: none; /* 預設隱藏 */
+            position: fixed;
+            top: 30px; /* 調整與頂部的距離 */
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #28a745; /* 綠色背景，表示成功 */
+            color: white;
+            padding: 18px 30px; /* 調整內邊距 */
+            border-radius: 10px; /* 更圓滑的邊角 */
+            box-shadow: 0 6px 12px rgba(0,0,0,0.25); /* 更明顯的陰影 */
+            z-index: 2000; /* 確保在最上層 */
+            text-align: center;
+            font-size: 1.15em; /* 稍大字體 */
+            font-weight: 500;
+            opacity: 0; /* 用於淡入動畫 */
+            transition: opacity 0.5s ease-in-out;
+        }
+        #assessment-success-toast.show {
+            display: block; /* 顯示時設為 block */
+            opacity: 1; /* 淡入 */
+        }
     </style>
 </head>
   <body>
+
+    <div id="assessment-success-toast">
+        謝謝，問卷已完成，請關閉視窗。
+    </div>
+
     <div class="relative flex size-full min-h-screen flex-col bg-white group/design-root overflow-x-hidden">
       <div class="layout-container flex h-full grow flex-col">
         <div class="px-4 sm:px-10 md:px-20 lg:px-40 flex flex-1 justify-center py-5">
@@ -19,10 +48,11 @@
             id="clinicForm"
             class="layout-content-container flex flex-col max-w-[960px] flex-1 bg-white shadow-lg rounded-xl overflow-hidden border border-gray-100"
           >
-            <div class="flex flex-wrap justify-between gap-3 p-6 md:p-8 bg-gray-50 border-b border-gray-200">
-              <p class="text-[#111816] tracking-light text-2xl md:text-[32px] font-bold leading-tight min-w-72">
-                問卷填寫 <span id="assessment-customer-id" class="text-base font-normal text-gray-500 ml-2"></span>
-              </p>
+            <div class="flex flex-wrap justify-between items-center gap-3 p-6 md:p-8 bg-gray-50 border-b border-gray-200">
+                <p class="text-[#111816] tracking-light text-2xl md:text-[32px] font-bold leading-tight min-w-72">
+                    問卷填寫 <span id="assessment-customer-id" class="text-base font-normal text-gray-500 ml-2"></span>
+                </p>
+                <button id="edit-assessment-button" class="action-button hidden">編輯</button>
             </div>
 
             <fieldset id="basicInfoSection" class="p-6 md:p-8 border-b border-[#dbe6e3] mb-4">
@@ -46,14 +76,7 @@
 
                         <input name="mobile" id="assessment-mobile" placeholder="行動電話" class="custom-form-input" />
                     </label>
-                    <label class="flex flex-col">
 
-                        <input name="localTel" id="assessment-localtel" placeholder="市內電話" class="custom-form-input" />
-                    </label>
-                    <label class="flex flex-col">
-
-                        <input name="email" id="assessment-email" placeholder="電子郵件" class="custom-form-input" type="email" />
-                    </label>
                     <label class="flex flex-col">
 
                         <input name="birth" id="assessment-birth" title="生日" class="custom-form-input" type="date" />
@@ -117,42 +140,42 @@
             </div>
 
             <div class="px-4 py-3">
-              <p class="text-[#111816] text-base font-medium leading-normal pb-2">四、除了今天來就診的原因外，下列診所提供的檢查或療程項目中，還有沒有任何您希望診所能再為您多解釋的？</label>
+              <p class="text-[#111816] text-base font-medium leading-normal pb-2">四、除了今天來就診的原因外，下列診所提供的檢查或療程項目中，還有沒有任何您希望診所能再為您多解釋的？</p>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
                   <div class="exo-section">
                       <p class="font-semibold pb-2">檢查項目</p>
                       <div class="grid grid-cols-2 gap-3">
-                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_c1" /><label for="q4_c1">自律神經檢測</label></div>
-                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_c2" /><label for="q4_c2">心電圖檢查</label></div>
-                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_c3" /><label for="q4_c3">頸動脈超音波檢查</label></div>
-                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_c4" /><label for="q4_c4">睡眠呼吸中止症居家檢測</label></div>
-                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_c5" /><label for="q4_c5">功能醫學檢測</label></div>
-                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_c6" /><label for="q4_c6">失智症基因檢測</label></div>
-                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_c7" /><label for="q4_c7">過敏原檢測</label></div>
-                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_c8" /><label for="q4_c8">癌症腫瘤指標檢測</label></div>
-                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_c9" /><label for="q4_c9">CTC 循環腫瘤細胞檢測</label></div>
-                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_c10" /><label for="q4_c10">EPC 內皮前趨細胞檢測</label></div>
-                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_c11" /><label for="q4_c11">先知先覺基因風險評估</label></div>
-                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_c12" /><label for="q4_c12">美塔力生理年齡檢測</label></div>
-                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_c13" /><label for="q4_c13">各項抽血檢測</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_c1"  value="自律神經檢測" /><label for="q4_c1">自律神經檢測</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_c2" value="心電圖檢查"/><label for="q4_c2">心電圖檢查</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_c3" value="頸動脈超音波檢查"/><label for="q4_c3">頸動脈超音波檢查</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_c4" value="睡眠呼吸中止症居家檢測"/><label for="q4_c4">睡眠呼吸中止症居家檢測</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_c5" value="功能醫學檢測"/><label for="q4_c5">功能醫學檢測</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_c6" value="失智症基因檢測"/><label for="q4_c6">失智症基因檢測</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_c7" value="過敏原檢測"/><label for="q4_c7">過敏原檢測</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_c8" value="癌症腫瘤指標檢測"/><label for="q4_c8">癌症腫瘤指標檢測</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_c9" value="CTC循環腫瘤細胞檢測"/><label for="q4_c9">CTC 循環腫瘤細胞檢測</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_c10" value="EPC內皮前趨細胞檢測"/><label for="q4_c10">EPC 內皮前趨細胞檢測</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_c11" value="先知先覺基因風險評估"/><label for="q4_c11">先知先覺基因風險評估</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_c12" value="美塔力生理年齡檢測"/><label for="q4_c12">美塔力生理年齡檢測</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_c13" value="各項抽血檢測"/><label for="q4_c13">各項抽血檢測</label></div>
                           <div class="flex items-center gap-2 col-span-2"><input type="checkbox" class="form-checkbox" id="q4_c14" /><input type="text" class="form-input h-8 ml-1 flex-1"/></div> <!-- 其他 -->
                       </div>
                   </div>
                    <div class="exo-section">
                       <p class="font-semibold pb-2">療程項目</p>
                       <div class="grid grid-cols-2 gap-3">
-                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_t1" /><label for="q4_t1">受傷震波治療</label></div>
-                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_t2" /><label for="q4_t2">男性功能震波治療</label></div>
-                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_t3" /><label for="q4_t3">二代PRP 治療</label></div>
-                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_t4" /><label for="q4_t4">各種點滴療程</label></div>
-                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_t5" /><label for="q4_t5">外泌體保養</label></div>
-                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_t6" /><label for="q4_t6">外泌體生髮</label></div>
-                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_t7" /><label for="q4_t7">訊聯血小板外泌體</label></div>
-                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_t8" /><label for="q4_t8">訊聯脂肪幹細胞外泌體</label></div>
-                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_t9" /><label for="q4_t9">瘦瘦針</label></div>
-                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_t10" /><label for="q4_t10">肉毒桿菌注射</label></div>
-                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_t11" /><label for="q4_t11">HPV疫苗注射</label></div>
-                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_t12" /><label for="q4_t12">帶狀泡疹疫苗注射</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_t1" value="受傷震波治療"/><label for="q4_t1">受傷震波治療</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_t2" value="男性功能震波治療"/><label for="q4_t2">男性功能震波治療</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_t3" value="二代PRP治療"/><label for="q4_t3">二代PRP治療</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_t4" value="點滴療程"/><label for="q4_t4">各種點滴療程</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_t5" value="外泌體保養"/><label for="q4_t5">外泌體保養</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_t6" value="外泌體生髮"/><label for="q4_t6">外泌體生髮</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_t7" value="血小板外泌體"/><label for="q4_t7">訊聯血小板外泌體</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_t8" value="脂肪幹細胞外泌體"/><label for="q4_t8">訊聯脂肪幹細胞外泌體</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_t9" value="瘦瘦針"/><label for="q4_t9">瘦瘦針</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_t10" value="肉毒桿菌"/><label for="q4_t10">肉毒桿菌注射</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_t11" value="HPV疫苗"/><label for="q4_t11">HPV疫苗注射</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox" id="q4_t12" value="帶狀泡疹疫苗"/><label for="q4_t12">帶狀泡疹疫苗注射</label></div>
                           <div class="flex items-center gap-2 col-span-2"><input type="checkbox" class="form-checkbox" id="q4_t13" /><input type="text" class="form-input h-8 ml-1 flex-1"/></div> <!-- 其他 -->
                       </div>
                   </div>
@@ -160,10 +183,32 @@
             </div>
 
             <div class="px-4 py-3">
-              <label class="flex flex-col w-full">
                 <p class="text-[#111816] text-base font-medium leading-normal pb-2">五、您是否正在使用長期藥物或營養保健品?請列出詳細項目:</p>
-                <textarea class="form-textarea w-full" rows="3" placeholder="(三高藥物、睡眠藥物、情緒藥物、各式保健品)"></textarea>
-              </label>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
+                  <div class="exo-section">
+                      <p class="font-semibold pb-2">長期藥物</p>
+                      <div class="grid grid-cols-2 gap-3">
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox"/><label for="q5_c1">降血壓藥</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox"/><label for="q5_c2">糖尿病藥物</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox"/><label for="q5_c3">膽固醇藥物</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox"/><label for="q5_c4">助眠藥物</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox"/><label for="q5_c5">情緒精神藥物</label></div>                                                                                                 
+                          <div class="flex items-center gap-2 col-span-2"><input type="checkbox" class="form-checkbox" id="q5_c14" /><input type="text" class="form-input h-8 ml-1 flex-1"/></div> <!-- 其他 -->
+                      </div>
+                  </div>
+                   <div class="exo-section">
+                      <p class="font-semibold pb-2">營養保健品</p>
+                      <div class="grid grid-cols-2 gap-3">
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox"/><label for="q4_t1">維生素與礦物質</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox"/><label for="q4_t2">魚油補充劑</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox"/><label for="q4_t3">骨骼健康</laberㄧl></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox"/><label for="q4_t4">腸胃健康</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox"/><label for="q4_t5">髮質強健</label></div>
+                          <div class="flex items-center gap-2"><input type="checkbox" class="form-checkbox"/><label for="q4_t6">膠原蛋白</label></div>
+                          <div class="flex items-center gap-2 col-span-2"><input type="checkbox" class="form-checkbox" id="q4_t13" /><input type="text" class="form-input h-8 ml-1 flex-1"/></div> <!-- 其他 -->
+                      </div>
+                  </div>
+              </div>
             </div>
              <div class="px-4 py-3">
               <label class="flex flex-col w-full">
@@ -751,19 +796,19 @@
             </div>
 
 
-            <div class="flex px-4 py-6 justify-end border-t border-[#dbe6e3] mt-6">
-              <button
+            <div id="form-actions-footer" class="flex px-4 py-6 justify-end border-t border-[#dbe6e3] mt-6">
+            <button
                 type="submit"
-                class="submit-button"
-              >
+                id="submit-assessment-button" class="submit-button"
+            >
                 <span class="truncate">送出表單</span>
-              </button>
+            </button>
             </div>
           </form>
         </div>
       </div>
     </div>
-    <script src="auth-check.js"></script>
+    <!-- <script src="auth-check.js"></script> -->
     <script src="assessment.js"></script>
   </body>
 </html>
